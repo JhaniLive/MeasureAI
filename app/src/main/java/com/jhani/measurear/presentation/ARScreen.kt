@@ -303,8 +303,15 @@ fun ARScreen(
                     else -> "Aim at the start point and stamp"
                 }
 
+                // Hold each message briefly so rapid state flicker doesn't overlap cross-fades
+                var shownGuidance by remember { mutableStateOf(guidanceText) }
+                LaunchedEffect(guidanceText) {
+                    delay(400)
+                    shownGuidance = guidanceText
+                }
+
                 HudTopBar(
-                    guidance = guidanceText,
+                    guidance = shownGuidance,
                     targetMeters = ui.targetMeters,
                     unit = unit,
                     onUnitChange = { unit = it },

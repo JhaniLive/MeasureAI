@@ -113,7 +113,8 @@ class ARSurfaceView(
         private const val MAX_HIT_DISTANCE = 5f
 
         // A plane hit this much farther than the nearest depth hit is behind an object (meters)
-        private const val OCCLUSION_TOLERANCE = 0.03f
+        private const val OCCLUSION_TOLERANCE = 0.08f
+        private const val OCCLUSION_RATIO = 0.12f
 
         // Edge-robust estimates: center + two rings (dp offsets) of hit-test samples
         private val EDGE_SAMPLE_OFFSETS: List<FloatArray> = buildList {
@@ -359,8 +360,13 @@ class ARSurfaceView(
         val hits = frame.hitTest(cx, cy).filter { it.distance <= MAX_HIT_DISTANCE }
         val planeHit = hits.firstOrNull { it.isOnStablePlane(cameraPose) }
         val estimateHit = hits.firstOrNull { it.isEstimate() }
-        val usePlane = planeHit != null &&
-            (estimateHit == null || planeHit.distance <= estimateHit.distance + OCCLUSION_TOLERANCE)
+        // Prefer the plane unless an estimate is clearly in front of it (an object standing on
+        // the surface). Depth noise on the surface itself is a few cm, so the margin must be
+        // well above that or the plane keeps losing to noisy depth points on itself.
+        val usePlane = planeHit != null && (
+            estimateHit == null ||
+                planeHit.distance <= estimateHit.distance + max(OCCLUSION_TOLERANCE, planeHit.distance * OCCLUSION_RATIO)
+            )
         val hit = if (usePlane) planeHit else estimateHit
         lastHitKind = when (val t = hit?.trackable) {
             null -> "none"

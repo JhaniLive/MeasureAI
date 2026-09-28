@@ -112,7 +112,8 @@ fun ARScreen(
     LaunchedEffect(debugOn) { sessionManager.debugView = debugOn }
     var magnifierOn by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(magnifierOn) { sessionManager.magnifierEnabled = magnifierOn }
-    var gridOcclusion by rememberSaveable { mutableStateOf(true) }
+    // Off by default: depth noise on this class of phone hid grid dots on the surface itself
+    var gridOcclusion by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(gridOcclusion) { sessionManager.gridOcclusion = gridOcclusion }
     val torchOn by sessionManager.torchOn.collectAsState()
     var showHistory by rememberSaveable { mutableStateOf(false) }

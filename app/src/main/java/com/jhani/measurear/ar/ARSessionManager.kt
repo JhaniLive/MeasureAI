@@ -134,7 +134,7 @@ class ARSessionManager(private val context: Context) {
 
     /** Whether the grid is hidden behind real objects using depth. UI thread writes, GL reads. */
     @Volatile
-    var gridOcclusion: Boolean = true
+    var gridOcclusion: Boolean = false
 
     private val _torchOn = MutableStateFlow(false)
     val torchOn: StateFlow<Boolean> = _torchOn.asStateFlow()

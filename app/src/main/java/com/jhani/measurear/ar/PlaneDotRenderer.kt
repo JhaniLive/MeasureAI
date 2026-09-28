@@ -101,8 +101,8 @@ class PlaneDotRenderer {
                 if (u_UseDepth > 0.5) {
                     float real = realDepthMm();
                     float dotMm = v_ViewDepth * 1000.0;
-                    // Allow for depth noise: at least 3 cm, growing to 5% of the distance
-                    float tolerance = max(30.0, dotMm * 0.05);
+                    // Allow for depth noise: at least 6 cm, growing to 10% of the distance
+                    float tolerance = max(60.0, dotMm * 0.10);
                     // 0 = no depth estimate for this pixel: keep the dot
                     if (real > 0.0) {
                         alpha *= smoothstep(dotMm - tolerance * 1.5, dotMm - tolerance * 0.5, real);

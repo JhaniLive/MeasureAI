@@ -52,6 +52,12 @@ class ARSurfaceView(
     private val backgroundRenderer = BackgroundRenderer()
     private val planeDotRenderer = PlaneDotRenderer()
     private val depthTexture = DepthTexture()
+    private val pointCloudRenderer = PointCloudRenderer()
+
+    /** Latest debug stats (GL thread), and what the crosshair hit this frame. */
+    private var debugStats: String? = null
+    private var lastHitKind = "none"
+    private var lastHitDistance = 0f
 
     // View-normalized -> depth texture coordinates (origin, U axis, V axis)
     private val viewCorners = floatArrayOf(0f, 0f, 1f, 0f, 0f, 1f)
@@ -170,6 +176,7 @@ class ARSurfaceView(
         backgroundRenderer.createOnGlThread()
         planeDotRenderer.createOnGlThread()
         depthTexture.createOnGlThread()
+        pointCloudRenderer.createOnGlThread()
         sessionManager.session?.setCameraTextureName(backgroundRenderer.textureId)
     }
 
@@ -182,8 +189,47 @@ class ARSurfaceView(
         sessionManager.session?.setDisplayGeometry(displayRotation, width, height)
     }
 
+    // TEMP perf diagnostics: per-stage time (ns), summed and logged every ~2 s
+    private val perfTotals = LongArray(6)
+    private var perfFrames = 0
+    private var perfWindowStart = 0L
+    private var perfLastFrame = 0L
+    private var perfMaxGap = 0L
+
+    private fun perfLog(session: Session) {
+        val now = System.nanoTime()
+        if (perfLastFrame != 0L) perfMaxGap = max(perfMaxGap, now - perfLastFrame)
+        perfLastFrame = now
+        if (perfWindowStart == 0L) perfWindowStart = now
+        perfFrames++
+        val elapsed = now - perfWindowStart
+        if (elapsed < 2_000_000_000L) return
+        val fps = perfFrames * 1e9 / elapsed
+        fun ms(i: Int) = perfTotals[i] / 1e6 / perfFrames
+        val planes = session.getAllTrackables(Plane::class.java)
+            .filter { it.trackingState == TrackingState.TRACKING && it.subsumedBy == null }
+        val line = "fps=%.1f maxGap=%.0fms | update=%.1f reticle=%.1f grid=%.1f loupe=%.1f publish=%.1f total=%.1f ms | planes=%d %s".format(
+            fps, perfMaxGap / 1e6, ms(0), ms(1), ms(2), ms(3), ms(4), ms(5), planes.size,
+            planes.joinToString { "%s %.2fx%.2f".format(it.type.name.take(5), it.extentX, it.extentZ) }
+        )
+        Log.i("Perf", line)
+        debugStats = buildString {
+            appendLine("FPS  %.0f   (worst gap %.0f ms)".format(fps, perfMaxGap / 1e6))
+            appendLine("Frame %.1f ms: update %.1f · aim %.1f · grid %.1f".format(ms(5), ms(0), ms(1), ms(2)))
+            appendLine("Surfaces %d".format(planes.size))
+            planes.take(3).forEach { appendLine("  %s %.2f × %.2f m".format(it.type.name.take(10), it.extentX, it.extentZ)) }
+            appendLine("Feature points %d".format(pointCloudRenderer.lastPointCount))
+            append("Depth %s".format(if (sessionManager.depthEnabled) "on" else "off"))
+        }
+        perfTotals.fill(0)
+        perfFrames = 0
+        perfWindowStart = now
+        perfMaxGap = 0L
+    }
+
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+        val tFrame = System.nanoTime()
 
         val session = sessionManager.session ?: return
 
@@ -193,6 +239,7 @@ class ARSurfaceView(
 
             val frame = session.update()
             backgroundRenderer.draw(frame)
+            val tUpdate = System.nanoTime()
 
             val camera = frame.camera
             if (camera.trackingState != TrackingState.TRACKING) {
@@ -206,6 +253,7 @@ class ARSurfaceView(
             camera.getViewMatrix(viewMatrix, 0)
 
             val reticle = applyAlignment(findReticleTarget(frame))
+            val tReticle = System.nanoTime()
             if ((reticle?.state == ReticleState.SNAPPED && lastReticleState != ReticleState.SNAPPED) ||
                 (reticle?.axis != null && reticle.axis != lastSnapAxis)
             ) {
@@ -242,6 +290,11 @@ class ARSurfaceView(
                 )
             }
 
+            if (sessionManager.debugView) {
+                pointCloudRenderer.draw(frame, allPlanes, projectionMatrix, viewMatrix)
+            }
+            val tGrid = System.nanoTime()
+
             // Magnifier next to the crosshair, only while the aim is steady and close
             loupeVisible = updateLoupeVisibility(reticle, camera.pose, now)
             if (loupeVisible) {
@@ -256,8 +309,19 @@ class ARSurfaceView(
                 )
             }
 
+            val tLoupe = System.nanoTime()
+
             applyActions(session, frame, reticle)
             publishTracking(reticle, camera.pose)
+
+            val tEnd = System.nanoTime()
+            perfTotals[0] += tUpdate - tFrame
+            perfTotals[1] += tReticle - tUpdate
+            perfTotals[2] += tGrid - tReticle
+            perfTotals[3] += tLoupe - tGrid
+            perfTotals[4] += tEnd - tLoupe
+            perfTotals[5] += tEnd - tFrame
+            perfLog(session)
 
         } catch (_: SessionPausedException) {
             // Expected briefly while the activity is paused
@@ -298,6 +362,14 @@ class ARSurfaceView(
         val usePlane = planeHit != null &&
             (estimateHit == null || planeHit.distance <= estimateHit.distance + OCCLUSION_TOLERANCE)
         val hit = if (usePlane) planeHit else estimateHit
+        lastHitKind = when (val t = hit?.trackable) {
+            null -> "none"
+            is Plane -> "PLANE"
+            is DepthPoint -> "depth"
+            is Point -> "feature"
+            else -> t.javaClass.simpleName
+        }
+        lastHitDistance = hit?.distance ?: 0f
         if (hit == null) {
             reticleFilter.reset()
             return null
@@ -932,6 +1004,12 @@ class ARSurfaceView(
                 guide = guide,
                 reticleAmbiguous = reticle?.ambiguous == true,
                 reticleReliable = reticle?.onSurface == true,
+                debugText = if (sessionManager.debugView) {
+                    (debugStats ?: "Collecting stats…") +
+                        "\nAim: $lastHitKind" + (if (lastHitKind != "none") " at %.2f m".format(lastHitDistance) else "")
+                } else {
+                    null
+                },
                 loupeVisible = loupeVisible,
                 targetMeters = reticle?.let { distanceBetween(cameraPose, it.pose) },
                 segments = segments,

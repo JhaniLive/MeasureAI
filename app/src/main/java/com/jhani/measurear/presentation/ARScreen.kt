@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -107,6 +108,8 @@ fun ARScreen(
     // The AR camera view, for photos (a window copy alone leaves the camera area black)
     var cameraView by remember { mutableStateOf<ARSurfaceView?>(null) }
     LaunchedEffect(showGrid) { sessionManager.showGrid = showGrid }
+    var debugOn by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(debugOn) { sessionManager.debugView = debugOn }
     var magnifierOn by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(magnifierOn) { sessionManager.magnifierEnabled = magnifierOn }
     var gridOcclusion by rememberSaveable { mutableStateOf(true) }
@@ -310,7 +313,27 @@ fun ARScreen(
                     shownGuidance = guidanceText
                 }
 
+                // Debug stats panel (long-press the title to toggle)
+                ui.debugText?.let { text ->
+                    Text(
+                        text = text,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 12.dp, top = 40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .padding(10.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFFFD60A),
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
                 HudTopBar(
+                    onToggleDebug = {
+                        debugOn = !debugOn
+                        hint = if (debugOn) "Debug view on — feature points, surfaces, stats" else "Debug view off"
+                    },
                     guidance = shownGuidance,
                     targetMeters = ui.targetMeters,
                     unit = unit,
@@ -478,6 +501,7 @@ fun ARScreen(
  */
 @Composable
 private fun HudTopBar(
+    onToggleDebug: () -> Unit,
     guidance: String,
     targetMeters: Float?,
     unit: MeasureUnit,
@@ -507,7 +531,9 @@ private fun HudTopBar(
                     text = "MeasureAR",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = Color.White,
+                    // Hidden developer switch: long-press toggles the debug view
+                    modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onToggleDebug)
                 )
                 AnimatedContent(
                     targetState = guidance,

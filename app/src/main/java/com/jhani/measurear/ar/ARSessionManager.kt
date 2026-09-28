@@ -124,6 +124,10 @@ class ARSessionManager(private val context: Context) {
     @Volatile
     var showGrid: Boolean = true
 
+    /** Debug view: feature points, plane outlines, live stats. UI thread writes, GL reads. */
+    @Volatile
+    var debugView: Boolean = false
+
     /** User setting: allow the magnifier to appear. UI thread writes, GL reads. */
     @Volatile
     var magnifierEnabled: Boolean = true

@@ -155,6 +155,8 @@ data class MeasureUiState(
     val snapAxis: SnapAxis? = null,
     val guide: ScreenSegment? = null,
     val targetMeters: Float? = null,
+    /** Debug view stats text, or null when the debug view is off. */
+    val debugText: String? = null,
     /** A point placed here is reliable (detected surface, or locked vertical from one). */
     val reticleReliable: Boolean = false,
     /** The aim is on an object edge where depth is ambiguous (estimate may be unreliable). */

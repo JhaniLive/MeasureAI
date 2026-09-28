@@ -155,6 +155,8 @@ data class MeasureUiState(
     val snapAxis: SnapAxis? = null,
     val guide: ScreenSegment? = null,
     val targetMeters: Float? = null,
+    /** Detected surfaces ARCore is tracking right now (measuring needs at least one). */
+    val surfaceCount: Int = 0,
     /** Debug view stats text, or null when the debug view is off. */
     val debugText: String? = null,
     /** A point placed here is reliable (detected surface, or locked vertical from one). */

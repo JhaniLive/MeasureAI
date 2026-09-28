@@ -16,7 +16,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -147,11 +146,6 @@ fun ARScreen(
     var lastCapture by remember { mutableStateOf<HistoryRecord?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Onboarding shows until the first surface is found
-    var onboarded by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(ui.isTracking, ui.reticle) {
-        if (ui.isTracking && ui.reticle != ReticleState.SEARCHING) onboarded = true
-    }
     LaunchedEffect(lastCapture) {
         if (lastCapture != null) {
             delay(4000)
@@ -287,7 +281,8 @@ fun ARScreen(
                 // Lines, points, labels and reticle
                 MeasureOverlay(ui = ui, unit = unit, onLineTap = { selectedLine = it })
 
-                if (!onboarded) {
+                // Scanning guide whenever ARCore has no surface to measure on
+                if (ui.surfaceCount == 0 && !ui.hasPendingPoint) {
                     OnboardingHint(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -297,6 +292,7 @@ fun ARScreen(
 
                 val guidanceText = when {
                     !ui.isTracking -> ui.trackingMessage ?: "Move phone slowly to get started"
+                    ui.surfaceCount == 0 -> "Scanning — point down at a table or floor"
                     ui.reticle == ReticleState.SEARCHING -> "Move phone slowly and aim at a surface"
                     ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
                     ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
@@ -389,9 +385,6 @@ fun ARScreen(
                     canUndo = ui.hasPendingPoint || ui.lineCount > 0,
                     onUndo = { sessionManager.requestAction(MeasureAction.Undo) },
                     onAdd = { pressedAt -> sessionManager.requestAction(MeasureAction.AddPoint(pressedAt)) },
-                    onForceAdd = { pressedAt ->
-                        sessionManager.requestAction(MeasureAction.AddPoint(pressedAt, force = true))
-                    },
                     onClear = { sessionManager.requestAction(MeasureAction.Clear) },
                     onSelectTool = { tool = it },
                     modifier = Modifier.align(Alignment.BottomCenter)
@@ -665,7 +658,6 @@ private fun MeasureControls(
     canUndo: Boolean,
     onUndo: () -> Unit,
     onAdd: (pressedAtNanos: Long) -> Unit,
-    onForceAdd: (pressedAtNanos: Long) -> Unit,
     onClear: () -> Unit,
     onSelectTool: (Tool) -> Unit,
     modifier: Modifier = Modifier
@@ -704,7 +696,7 @@ private fun MeasureControls(
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 HudIconButton(R.drawable.ic_undo, "Undo", enabled = canUndo, onClick = onUndo)
             }
-            StampButton(enabled = canAdd, onClick = onAdd, onLongClick = onForceAdd)
+            StampButton(enabled = canAdd, onClick = onAdd)
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 HudIconButton(R.drawable.ic_delete_sweep, "Clear", enabled = canUndo, onClick = onClear)
             }
@@ -713,8 +705,6 @@ private fun MeasureControls(
         ToolTabs(selected = Tool.MEASURE, onSelect = onSelectTool)
     }
 }
-
-private const val LONG_PRESS_MILLIS = 500L
 
 /** Screens reachable from the bottom tabs. */
 enum class Tool { MEASURE, LEVEL }
@@ -797,17 +787,11 @@ fun ToolTabs(selected: Tool, onSelect: (Tool) -> Unit, modifier: Modifier = Modi
 
 /**
  * Glowing teal circular button that stamps a point at the reticle. The press time is taken
- * at touch-down, so the point uses the aim from before the thumb nudged the phone. A long
- * press forces a point even where only a depth estimate is available.
+ * at touch-down, so the point uses the aim from before the thumb nudged the phone.
  */
 @Composable
-private fun StampButton(
-    enabled: Boolean,
-    onClick: (pressedAtNanos: Long) -> Unit,
-    onLongClick: (pressedAtNanos: Long) -> Unit
-) {
+private fun StampButton(enabled: Boolean, onClick: (pressedAtNanos: Long) -> Unit) {
     val currentOnClick by rememberUpdatedState(onClick)
-    val currentOnLongClick by rememberUpdatedState(onLongClick)
     val alpha = if (enabled) 1f else 0.45f
     Box(
         modifier = Modifier
@@ -823,14 +807,8 @@ private fun StampButton(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown()
-                    val pressedAt = System.nanoTime()
-                    val released = withTimeoutOrNull(LONG_PRESS_MILLIS) { waitForUpOrCancellation() }
-                    if (released != null) {
-                        currentOnClick(pressedAt)
-                    } else {
-                        currentOnLongClick(pressedAt)
-                        waitForUpOrCancellation()
-                    }
+                    currentOnClick(System.nanoTime())
+                    waitForUpOrCancellation()
                 }
             },
         contentAlignment = Alignment.Center

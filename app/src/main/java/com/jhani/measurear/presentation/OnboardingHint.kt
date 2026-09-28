@@ -74,7 +74,7 @@ fun OnboardingHint(modifier: Modifier = Modifier) {
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Move your phone slowly side to side\nto find a surface",
+            text = "Point down at a table or floor from about 50 cm\nand slide the phone sideways slowly",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,

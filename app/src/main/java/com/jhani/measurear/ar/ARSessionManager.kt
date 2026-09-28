@@ -41,11 +41,7 @@ sealed interface MeasureAction {
      * Stamp a point. [pressedAtNanos] ([System.nanoTime]) is when the user pressed, so the
      * point can use where the reticle was *before* the press nudged the phone.
      */
-    data class AddPoint(
-        val pressedAtNanos: Long = System.nanoTime(),
-        /** Place the point even when it's only a depth estimate (long-press Stamp). */
-        val force: Boolean = false
-    ) : MeasureAction
+    data class AddPoint(val pressedAtNanos: Long = System.nanoTime()) : MeasureAction
     data object Undo : MeasureAction
     data object Clear : MeasureAction
 

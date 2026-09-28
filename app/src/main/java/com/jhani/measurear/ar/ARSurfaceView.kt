@@ -54,6 +54,9 @@ class ARSurfaceView(
     private val depthTexture = DepthTexture()
     private val pointCloudRenderer = PointCloudRenderer()
 
+    /** Detected surfaces this frame (GL thread). */
+    private var surfaceCount = 0
+
     /** Latest debug stats (GL thread), and what the crosshair hit this frame. */
     private var debugStats: String? = null
     private var lastHitKind = "none"
@@ -271,6 +274,10 @@ class ARSurfaceView(
 
             // Teal dot grid on detected surfaces, highlighted around the reticle
             val allPlanes = session.getAllTrackables(Plane::class.java)
+            surfaceCount = allPlanes.count {
+                it.trackingState == TrackingState.TRACKING && it.subsumedBy == null &&
+                    it.type != Plane.Type.HORIZONTAL_DOWNWARD_FACING
+            }
             if (sessionManager.showGrid) {
                 val occlusion = if (sessionManager.depthEnabled && sessionManager.gridOcclusion) {
                     depthTexture.update(frame)
@@ -714,7 +721,7 @@ class ARSurfaceView(
     private fun applyActions(session: Session, frame: Frame, reticle: ReticleTarget?) {
         while (true) {
             when (val action = sessionManager.pollAction() ?: return) {
-                is MeasureAction.AddPoint -> addPoint(session, frame, reticleAt(action.pressedAtNanos, reticle), action.force)
+                is MeasureAction.AddPoint -> addPoint(session, frame, reticleAt(action.pressedAtNanos, reticle))
                 MeasureAction.Undo -> sessionManager.undo()
                 MeasureAction.Clear -> {
                     sessionManager.clearAll()
@@ -830,15 +837,15 @@ class ARSurfaceView(
         return before?.second ?: current
     }
 
-    private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?, force: Boolean) {
+    private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?) {
         if (reticle == null) {
             sessionManager.showHint("Aim the circle at a surface first")
             return
         }
-        // Without a depth sensor, estimates can be off by tens of centimeters: only measure
-        // on detected surfaces unless the user explicitly forces it
-        if (!reticle.onSurface && !force) {
-            sessionManager.showHint("Aim at a detected surface (teal) — or long-press Stamp to place an estimate")
+        // Without a depth sensor, estimates can be off by tens of centimeters: only measure on
+        // detected surfaces (or lines locked vertical from one)
+        if (!reticle.onSurface) {
+            sessionManager.showHint("Aim at a detected surface — the crosshair turns teal")
             return
         }
 
@@ -1010,6 +1017,7 @@ class ARSurfaceView(
                 guide = guide,
                 reticleAmbiguous = reticle?.ambiguous == true,
                 reticleReliable = reticle?.onSurface == true,
+                surfaceCount = surfaceCount,
                 debugText = if (sessionManager.debugView) {
                     (debugStats ?: "Collecting stats…") +
                         "\nAim: $lastHitKind" + (if (lastHitKind != "none") " at %.2f m".format(lastHitDistance) else "")

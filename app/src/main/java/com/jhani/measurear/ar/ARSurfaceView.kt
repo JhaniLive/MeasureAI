@@ -60,6 +60,9 @@ class ARSurfaceView(
     /** Latest debug stats (GL thread), and what the crosshair hit this frame. */
     private var debugStats: String? = null
     private var lastHitKind = "none"
+
+    /** Why the last aim off a surface was / wasn't extended onto a nearby table patch (debug). */
+    private var lastExtendReason = ""
     private var lastHitDistance = 0f
 
     // View-normalized -> depth texture coordinates (origin, U axis, V axis)
@@ -120,10 +123,12 @@ class ARSurfaceView(
         private const val OCCLUSION_RATIO = 0.12f
 
         // Extending a detected table patch: how far beyond it (m), and how closely the depth
-        // estimate must agree with the extended plane's distance (m / fraction of distance)
+        // estimate must agree with the extended plane's distance (m / fraction of distance).
+        // Loose on purpose: depth on plain tables is noisy; this only has to tell the table
+        // from the floor ~70 cm below it. The position itself comes from the plane.
         private const val EXTEND_MAX = 0.6f
-        private const val EXTEND_TOLERANCE = 0.04f
-        private const val EXTEND_RATIO = 0.06f
+        private const val EXTEND_TOLERANCE = 0.10f
+        private const val EXTEND_RATIO = 0.20f
 
         // Vertical snap window when the aim isn't on a surface (top of a bottle, box…)
         private const val VERTICAL_SNAP_WIDE_DP = 70f
@@ -450,27 +455,34 @@ class ARSurfaceView(
         val d = floatArrayOf(e.tx() - o[0], e.ty() - o[1], e.tz() - o[2])
         normalize(d)
         var best: Pick? = null
+        val reasons = StringBuilder()
         val planes = sessionManager.session?.getAllTrackables(Plane::class.java) ?: return null
         for (plane in planes) {
             if (plane.trackingState != TrackingState.TRACKING || plane.subsumedBy != null ||
                 plane.type != Plane.Type.HORIZONTAL_UPWARD_FACING ||
                 plane.extentX < MIN_PLANE_EXTENT || plane.extentZ < MIN_PLANE_EXTENT
             ) continue
+            val tag = "%.1fx%.1f".format(plane.extentX, plane.extentZ)
             val c = plane.centerPose
             val n = FloatArray(3)
             c.getTransformedAxis(1, 1f, n, 0)
             val denom = n[0] * d[0] + n[1] * d[1] + n[2] * d[2]
-            if (denom > -0.05f) continue // looking along or from below the surface
+            if (denom > -0.05f) { reasons.append("$tag:grazing "); continue } // along or below the surface
             val t = (n[0] * (c.tx() - o[0]) + n[1] * (c.ty() - o[1]) + n[2] * (c.tz() - o[2])) / denom
-            if (t <= 0f || t > MAX_HIT_DISTANCE) continue
-            if (abs(t - estimateHit.distance) > max(EXTEND_TOLERANCE, t * EXTEND_RATIO)) continue
+            if (t <= 0f || t > MAX_HIT_DISTANCE) { reasons.append("$tag:behind "); continue }
+            if (abs(t - estimateHit.distance) > max(EXTEND_TOLERANCE, t * EXTEND_RATIO)) {
+                reasons.append("$tag:depth %.2f vs plane %.2f ".format(estimateHit.distance, t)); continue
+            }
             val q = floatArrayOf(o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t)
             val fromCenter = sqrt((q[0] - c.tx()).let { it * it } + (q[2] - c.tz()).let { it * it })
-            if (fromCenter > max(plane.extentX, plane.extentZ) / 2f + EXTEND_MAX) continue
+            if (fromCenter > max(plane.extentX, plane.extentZ) / 2f + EXTEND_MAX) {
+                reasons.append("$tag:too far %.2f ".format(fromCenter)); continue
+            }
             if (best == null || t < best.distance) {
                 best = Pick(Pose(q, c.rotationQuaternion), t, plane, estimateHit, extended = true)
             }
         }
+        lastExtendReason = if (best != null) "extended" else reasons.toString().ifEmpty { "no horizontal surface" }
         return best
     }
 
@@ -944,7 +956,7 @@ class ARSurfaceView(
             "${if (fromTap) "tap" else "stamp"} target=${reticle?.state} onSurface=${reticle?.onSurface} " +
                 "axis=${reticle?.axis} replaceStart=${reticle?.replaceStart != null} " +
                 "pending=${sessionManager.pendingStart?.let { if (it.onSurface) "surface" else "top" }} " +
-                "aim=$lastHitKind surfaces=$surfaceCount"
+                "aim=$lastHitKind surfaces=$surfaceCount extend=[$lastExtendReason]"
         )
         val pending = sessionManager.pendingStart
         // Top of an object (bottle, box) as the start of a height: its depth is never used, only

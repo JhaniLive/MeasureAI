@@ -289,10 +289,11 @@ private fun DrawScope.drawAreaLabel(area: ScreenArea, unit: MeasureUnit, textMea
  * position against object edges is easy to judge.
  */
 private fun DrawScope.drawLoupe(ui: MeasureUiState) {
-    val loupeCenter = Offset(LoupeSpec.centerX(size.width, density), LoupeSpec.centerY(size.height, density))
+    val loupeCenter = if (ui.loupeCenterX > 0f) Offset(ui.loupeCenterX, ui.loupeCenterY)
+    else Offset(LoupeSpec.centerX(size.width, density), LoupeSpec.centerY(size.height, density))
     val radius = LoupeSpec.RADIUS_DP.dp.toPx()
     val zoom = LoupeSpec.ZOOM
-    val screenCenter = center
+    val screenCenter = if (ui.loupeSourceX > 0f) Offset(ui.loupeSourceX, ui.loupeSourceY) else center
     fun magnify(x: Float, y: Float) = loupeCenter + (Offset(x, y) - screenCenter) * zoom
 
     val circle = Path().apply { addOval(Rect(loupeCenter, radius)) }

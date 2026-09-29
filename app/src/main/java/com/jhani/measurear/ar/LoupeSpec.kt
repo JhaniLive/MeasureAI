@@ -16,6 +16,9 @@ object LoupeSpec {
 
     const val ZOOM = 2.5f
 
+    // While dragging a point, the loupe floats this far above the finger
+    const val DRAG_LIFT_DP = 120f
+
     // Beyond this the camera can't resolve detail worth magnifying
     const val MAX_DISTANCE_METERS = 2.0f
 

@@ -146,6 +146,8 @@ data class MeasureUiState(
     val trackingMessage: String? = null,
     val reticle: ReticleState = ReticleState.SEARCHING,
     val hasPendingPoint: Boolean = false,
+    /** The pending point is the top of an object (height finished at its base). */
+    val pendingIsTop: Boolean = false,
     val pendingX: Float = 0f,
     val pendingY: Float = 0f,
     val pendingVisible: Boolean = false,
@@ -171,8 +173,13 @@ data class MeasureUiState(
     val reticleReliable: Boolean = false,
     /** The aim is on an object edge where depth is ambiguous (estimate may be unreliable). */
     val reticleAmbiguous: Boolean = false,
-    /** Whether the magnifier is showing this frame (steady aim, close enough). */
+    /** Whether the magnifier is showing this frame (steady aim, close enough, or dragging). */
     val loupeVisible: Boolean = false,
+    /** Magnifier center, and the screen point it magnifies (view pixels; 0 = default). */
+    val loupeCenterX: Float = 0f,
+    val loupeCenterY: Float = 0f,
+    val loupeSourceX: Float = 0f,
+    val loupeSourceY: Float = 0f,
     val segments: List<ScreenSegment> = emptyList(),
     val areas: List<ScreenArea> = emptyList(),
     /** Every completed line and area, including off-screen ones (for sharing / history). */

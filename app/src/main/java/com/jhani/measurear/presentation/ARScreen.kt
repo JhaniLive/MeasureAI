@@ -311,6 +311,8 @@ fun ARScreen(
                         "Approximate here (≈) — on the teal dots it's exact"
                     ui.mode != MeasureMode.LINE -> ui.mode.howTo
                     (ui.targetMeters ?: 1f) < 0.2f -> "Too close — step back about 50 cm"
+                    ui.snapAxis == SnapAxis.VERTICAL && ui.pendingIsTop ->
+                        "Locked vertical — stamp exactly where it meets the table"
                     ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
                     ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
                     ui.reticle == ReticleState.ESTIMATE && !ui.reticleReliable ->

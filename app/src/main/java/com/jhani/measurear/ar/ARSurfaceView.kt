@@ -133,6 +133,10 @@ class ARSurfaceView(
         private const val OCCLUSION_TOLERANCE = 0.08f
         private const val OCCLUSION_RATIO = 0.12f
 
+        // Stricter margin when placing the base of a height (see aimingAtBase)
+        private const val STRICT_OCCLUSION_TOLERANCE = 0.025f
+        private const val STRICT_OCCLUSION_RATIO = 0.035f
+
         // Extending a detected table patch: how far beyond it (m), and how closely the depth
         // estimate must agree with the extended plane's distance (m / fraction of distance).
         // Loose on purpose: depth on plain tables is noisy; this only has to tell the table
@@ -332,17 +336,21 @@ class ARSurfaceView(
             }
             val tGrid = System.nanoTime()
 
-            // Magnifier next to the crosshair, only while the aim is steady and close
+            // Magnifier next to the crosshair, only while the aim is steady and close; while a
+            // point is dragged it follows the finger instead, showing what's under it
             loupeVisible = updateLoupeVisibility(reticle, camera.pose, now)
+            placeLoupe()
             if (loupeVisible) {
                 backgroundRenderer.drawLoupe(
                     frame,
-                    centerX = LoupeSpec.centerX(viewportWidth.toFloat(), density),
-                    centerY = LoupeSpec.centerY(viewportHeight.toFloat(), density),
+                    centerX = loupeCenter[0],
+                    centerY = loupeCenter[1],
                     radius = LoupeSpec.RADIUS_DP * density,
                     zoom = LoupeSpec.ZOOM,
                     viewportWidth = viewportWidth,
-                    viewportHeight = viewportHeight
+                    viewportHeight = viewportHeight,
+                    sourceX = loupeSource[0],
+                    sourceY = loupeSource[1]
                 )
             }
 
@@ -391,7 +399,7 @@ class ARSurfaceView(
             )
         }
 
-        val picked = pickHit(frame, cx, cy)
+        val picked = pickHit(frame, cx, cy, strict = aimingAtBase())
         lastHitKind = when {
             picked == null -> "none"
             picked.extended -> "PLANE (extended)"
@@ -437,7 +445,26 @@ class ARSurfaceView(
     private class Pick(val pose: Pose, val distance: Float, val plane: Plane?, val hit: HitResult, val extended: Boolean = false)
 
     /** Hit tests screen position ([x], [y]) and picks where to measure. */
-    private fun pickHit(frame: Frame, x: Float, y: Float): Pick? {
+    /**
+     * Placing the base of a height (Height mode, a box's floor corners, or the bottom of a
+     * top-first line). Here the table *behind* a narrow object must not win over the object:
+     * a base a few cm too far back makes the height several cm too short.
+     */
+    private fun aimingAtBase(): Boolean {
+        val pending = sessionManager.pendingStart
+        return when (sessionManager.mode) {
+            MeasureMode.LINE -> pending != null && !pending.onSurface
+            MeasureMode.HEIGHT -> sessionManager.draft.isEmpty()
+            MeasureMode.VOLUME -> sessionManager.draft.size < 3
+            else -> false
+        }
+    }
+
+    /**
+     * @param strict prefer an object in front over the plane behind it even when they are
+     *   close in depth (bases of heights); otherwise depth noise on the surface is tolerated
+     */
+    private fun pickHit(frame: Frame, x: Float, y: Float, strict: Boolean = false): Pick? {
         val cameraPose = frame.camera.pose
         // Hits are sorted nearest first. A plane hit is only used when nothing is in front of
         // it; otherwise an object (e.g. a cup) is occluding the plane and the nearer hit wins.
@@ -449,7 +476,11 @@ class ARSurfaceView(
         // well above that or the plane keeps losing to noisy depth points on itself.
         val usePlane = planeHit != null && (
             estimateHit == null ||
-                planeHit.distance <= estimateHit.distance + max(OCCLUSION_TOLERANCE, planeHit.distance * OCCLUSION_RATIO)
+                planeHit.distance <= estimateHit.distance + if (strict) {
+                    max(STRICT_OCCLUSION_TOLERANCE, planeHit.distance * STRICT_OCCLUSION_RATIO)
+                } else {
+                    max(OCCLUSION_TOLERANCE, planeHit.distance * OCCLUSION_RATIO)
+                }
             )
         return when {
             usePlane -> Pick(planeHit!!.hitPose, planeHit.distance, planeHit.trackable as Plane, planeHit)
@@ -513,7 +544,7 @@ class ARSurfaceView(
                 plane = null, snappedTo = point, onSurface = point.onSurface
             )
         }
-        val picked = pickHit(frame, x, y) ?: return null
+        val picked = pickHit(frame, x, y, strict = aimingAtBase()) ?: return null
         return ReticleTarget(
             pose = picked.pose,
             state = if (picked.plane != null) ReticleState.SURFACE else ReticleState.ESTIMATE,
@@ -1115,6 +1146,30 @@ class ARSurfaceView(
         dragApplied = to
     }
 
+    /** Loupe center and the screen point it magnifies (view pixels). */
+    private val loupeCenter = FloatArray(2)
+    private val loupeSource = FloatArray(2)
+
+    private fun placeLoupe() {
+        val finger = dragTo?.takeIf { dragging != null }
+        if (finger == null) {
+            loupeSource[0] = viewportWidth / 2f
+            loupeSource[1] = viewportHeight / 2f
+            loupeCenter[0] = LoupeSpec.centerX(viewportWidth.toFloat(), density)
+            loupeCenter[1] = LoupeSpec.centerY(viewportHeight.toFloat(), density)
+            return
+        }
+        loupeVisible = true
+        loupeSource[0] = finger[0]
+        loupeSource[1] = finger[1]
+        val r = LoupeSpec.RADIUS_DP * density
+        val lift = LoupeSpec.DRAG_LIFT_DP * density
+        // Above the finger, or below it near the top of the screen; always fully on screen
+        val above = finger[1] - lift
+        loupeCenter[0] = finger[0].coerceIn(r, viewportWidth - r)
+        loupeCenter[1] = (if (above - r < 90f * density) finger[1] + lift else above).coerceIn(r, viewportHeight - r)
+    }
+
     private fun endDrag() {
         if (dragging != null) post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
         dragging = null
@@ -1427,6 +1482,7 @@ class ARSurfaceView(
                 result = shapeUi.result,
                 reticle = reticle?.state ?: ReticleState.SEARCHING,
                 hasPendingPoint = pending != null,
+                pendingIsTop = pending != null && !pending.onSurface,
                 pendingX = pendingScreen?.get(0) ?: 0f,
                 pendingY = pendingScreen?.get(1) ?: 0f,
                 pendingVisible = pendingScreen != null,
@@ -1448,6 +1504,10 @@ class ARSurfaceView(
                     null
                 },
                 loupeVisible = loupeVisible,
+                loupeCenterX = loupeCenter[0],
+                loupeCenterY = loupeCenter[1],
+                loupeSourceX = loupeSource[0],
+                loupeSourceY = loupeSource[1],
                 targetMeters = reticle?.let { distanceBetween(cameraPose, it.pose) },
                 segments = segments,
                 areas = areas,

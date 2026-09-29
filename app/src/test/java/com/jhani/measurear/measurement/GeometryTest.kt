@@ -61,6 +61,19 @@ class GeometryTest {
         assertEquals(0.31f, result.y, 0.005f)
     }
 
+    @Test fun baseBehindObjectUnderestimatesHeight() {
+        // 26 cm flask 0.7 m away, camera 0.45 m above the table, top stamped on its rim.
+        // Base picked on the table 10 cm *behind* the flask (plane won over the flask body):
+        val cam = v(0f, 0.45f, 0f)
+        val top = v(0f, 0.26f, -0.7f)
+        val wrongBase = v(0f, 0f, -0.8f)
+        val h = Geometry.verticalFromBase(wrongBase, cam, top - cam)!!.y
+        // 0.26 − 0.19 × 0.10 / 0.70 ≈ 23.3 cm: several cm short (the phone's 22.6 fits ~12 cm behind)
+        assertEquals(0.2329f, h, 1e-3f)
+        // Base at the flask's foot: exact
+        assertEquals(0.26f, Geometry.verticalFromBase(v(0f, 0f, -0.7f), cam, top - cam)!!.y, 1e-4f)
+    }
+
     @Test fun heightRejectsVerticalRay() {
         assertNull(Geometry.verticalFromBase(v(0f, 0f, 0f), v(0f, 1f, 0f), v(0f, -1f, 0f)))
     }

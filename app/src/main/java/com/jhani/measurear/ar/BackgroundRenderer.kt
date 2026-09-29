@@ -167,17 +167,22 @@ class BackgroundRenderer {
         radius: Float,
         zoom: Float,
         viewportWidth: Int,
-        viewportHeight: Int
+        viewportHeight: Int,
+        /** Screen point to magnify (view pixels); the screen center by default. */
+        sourceX: Float = viewportWidth / 2f,
+        sourceY: Float = viewportHeight / 2f
     ) {
         if (viewportWidth == 0 || viewportHeight == 0) return
 
-        // Screen-center sub-rectangle in view-normalized coords, same corner order as the quad
+        // Sub-rectangle around the source in view-normalized coords, same corner order as the quad
         val hw = radius / zoom / viewportWidth
         val hh = radius / zoom / viewportHeight
-        val u0 = 0.5f - hw
-        val u1 = 0.5f + hw
-        val v0 = 0.5f - hh
-        val v1 = 0.5f + hh
+        val su = sourceX / viewportWidth
+        val sv = sourceY / viewportHeight
+        val u0 = su - hw
+        val u1 = su + hw
+        val v0 = sv - hh
+        val v1 = sv + hh
         loupeViewCoords[0] = u0; loupeViewCoords[1] = v1
         loupeViewCoords[2] = u1; loupeViewCoords[3] = v1
         loupeViewCoords[4] = u0; loupeViewCoords[5] = v0

@@ -261,6 +261,8 @@ fun ModeIllustration(mode: MeasureMode, modifier: Modifier = Modifier, compact: 
 fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit: MeasureUnit, modifier: Modifier = Modifier) {
     val needed = mode.points
     val step = when {
+        // A finished shape: name what the big number is ("HEIGHT", "AREA")
+        draftCount == 0 && result != null && !result.isLive && result.values.isNotEmpty() -> result.values.first().label
         draftCount == 0 -> mode.howTo
         needed != null -> "Point ${draftCount + 1} of $needed"
         draftCount < mode.minPoints -> {
@@ -277,7 +279,8 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
             letterSpacing = 1.2.sp,
             color = HudAmber,
             textAlign = TextAlign.Center,
-            maxLines = 1
+            maxLines = 2,
+            modifier = Modifier.padding(horizontal = 24.dp)
         )
         val values = result?.values.orEmpty()
         val primary = values.firstOrNull()

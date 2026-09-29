@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,6 +82,10 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
     val records by HistoryStore.records.collectAsState()
 
     var renaming by remember { mutableStateOf<HistoryRecord?>(null) }
+    val currentProject by HistoryStore.currentProject.collectAsState()
+    val projects by HistoryStore.projects.collectAsState()
+    var newProject by remember { mutableStateOf(false) }
+    var moving by remember { mutableStateOf<HistoryRecord?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { HistoryStore.load(context) }
@@ -113,7 +119,25 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
             }
         }
 
-        val list = records
+        // Projects: the selected one filters the list and receives new measurements
+        ProjectChips(
+            projects = projects,
+            selected = currentProject,
+            onSelect = { HistoryStore.setCurrentProject(context, it) },
+            onNew = { newProject = true },
+            onExport = currentProject?.let { project ->
+                {
+                    scope.launch {
+                        val inProject = records.orEmpty().filter { it.project == project }
+                        val pdf = HistoryStore.exportPdf(context, project, inProject, unit)
+                        HistoryStore.sharePdf(context, pdf)
+                    }
+                    Unit
+                }
+            }
+        )
+
+        val list = records?.let { all -> currentProject?.let { p -> all.filter { it.project == p } } ?: all }
         when {
             list == null -> Unit
             list.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -134,12 +158,52 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
                         record = record,
                         unit = unit,
                         onRename = { renaming = record },
+                        onMove = { moving = record },
                         onShare = { HistoryStore.share(context, record, unit) },
                         onDelete = { scope.launch { HistoryStore.delete(context, record.id) } }
                     )
                 }
             }
         }
+    }
+
+    if (newProject) {
+        RenameDialog(
+            initial = "",
+            title = "New project",
+            placeholder = "e.g. Living room",
+            onConfirm = { name ->
+                HistoryStore.setCurrentProject(context, name)
+                newProject = false
+            },
+            onDismiss = { newProject = false }
+        )
+    }
+
+    moving?.let { record ->
+        AlertDialog(
+            onDismissRequest = { moving = null },
+            title = { Text("Move to project") },
+            text = {
+                Column {
+                    (listOf<String?>(null) + projects).forEach { p ->
+                        Text(
+                            p ?: "No project",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (p == record.project) HudTeal.copy(alpha = 0.2f) else Color.Transparent)
+                                .clickable {
+                                    scope.launch { HistoryStore.move(context, record.id, p) }
+                                    moving = null
+                                }
+                                .padding(12.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { moving = null }) { Text("Cancel") } }
+        )
     }
 
     renaming?.let { record ->
@@ -176,6 +240,7 @@ private fun RecordCard(
     record: HistoryRecord,
     unit: MeasureUnit,
     onRename: () -> Unit,
+    onMove: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -243,23 +308,30 @@ private fun RecordCard(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SmallAction(R.drawable.ic_edit, "Rename", Color.White, onRename)
                 SmallAction(R.drawable.ic_share, "Share", HudTeal, onShare)
+                SmallAction(R.drawable.ic_history, record.project ?: "Project", Color.White.copy(alpha = 0.8f), onMove)
             }
         }
     }
 }
 
 @Composable
-private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+private fun RenameDialog(
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "Name this measurement",
+    placeholder: String = "e.g. Kitchen table width"
+) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Name this measurement") },
+        title = { Text(title) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                placeholder = { Text("e.g. Kitchen table width") },
+                placeholder = { Text(placeholder) },
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HudTeal, cursorColor = HudTeal)
             )
         },
@@ -294,5 +366,69 @@ private fun SmallAction(icon: Int, label: String, color: Color, onClick: () -> U
         Icon(painterResource(icon), contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(text = label, color = color, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/** "All", each project and "+ New"; with a project selected, a PDF export button. */
+@Composable
+private fun ProjectChips(
+    projects: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    onNew: () -> Unit,
+    onExport: (() -> Unit)?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        (listOf<String?>(null) + projects).forEach { p ->
+            val on = p == selected
+            Text(
+                p ?: "All",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (on) HudTeal else CardColor)
+                    .clickable { onSelect(p) }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                color = if (on) Color.Black else Color.White,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+        Text(
+            "+ New",
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, HudTeal.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                .clickable(onClick = onNew)
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            color = HudTeal,
+            style = MaterialTheme.typography.labelLarge
+        )
+        if (onExport != null) {
+            Text(
+                "PDF report",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                    .clickable(onClick = onExport)
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+    }
+    if (selected != null) {
+        Text(
+            "New measurements are saved to \"$selected\"",
+            color = Color.White.copy(alpha = 0.5f),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
     }
 }

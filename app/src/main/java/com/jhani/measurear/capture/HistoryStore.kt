@@ -38,7 +38,9 @@ data class HistoryRecord(
     val name: String,
     val createdAt: Long,
     val imagePath: String?,
-    val items: List<MeasurementSummary>
+    val items: List<MeasurementSummary>,
+    /** Project this measurement belongs to ("Living room"), or null. */
+    val project: String? = null
 ) {
     val image: File? get() = imagePath?.let(::File)?.takeIf { it.exists() }
 }
@@ -60,10 +62,49 @@ object HistoryStore {
     /** Newest first; null until first loaded. */
     val records: StateFlow<List<HistoryRecord>?> = _records.asStateFlow()
 
+    // ---- Projects: the one new measurements are saved into, and every project created ----
+
+    private const val PREFS = "measurear"
+    private const val KEY_CURRENT = "currentProject"
+    private const val KEY_PROJECTS = "projects"
+
+    private val _currentProject = MutableStateFlow<String?>(null)
+    val currentProject: StateFlow<String?> = _currentProject.asStateFlow()
+    private val _projects = MutableStateFlow<List<String>>(emptyList())
+    val projects: StateFlow<List<String>> = _projects.asStateFlow()
+
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private var projectsLoaded = false
+
+    private fun loadProjects(context: Context) {
+        projectsLoaded = true
+        val p = prefs(context)
+        _currentProject.value = p.getString(KEY_CURRENT, null)
+        _projects.value = p.getString(KEY_PROJECTS, "").orEmpty().split('\n').filter { it.isNotBlank() }
+    }
+
+    /** Saves new measurements into [name] (null = no project); creates it if new. */
+    fun setCurrentProject(context: Context, name: String?) {
+        val clean = name?.trim()?.takeIf { it.isNotEmpty() }
+        if (clean != null && clean !in _projects.value) _projects.value = _projects.value + clean
+        _currentProject.value = clean
+        prefs(context).edit()
+            .putString(KEY_CURRENT, clean)
+            .putString(KEY_PROJECTS, _projects.value.joinToString("\n"))
+            .apply()
+    }
+
+    /** Moves one measurement into [project] (null = none). */
+    suspend fun move(context: Context, id: String, project: String?) = update(context) { list ->
+        list.map { if (it.id == id) it.copy(project = project) else it }
+    }
+
     private fun indexFile(context: Context) = File(context.filesDir, INDEX)
     private fun photoDir(context: Context) = File(context.filesDir, PHOTOS).apply { mkdirs() }
 
     suspend fun load(context: Context) = mutex.withLock {
+        loadProjects(context)
         _records.value = withContext(Dispatchers.IO) { read(context) }
     }
 
@@ -79,7 +120,8 @@ object HistoryStore {
                         file.outputStream().use { out -> it.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out) }
                     }
                 }
-                val record = HistoryRecord(id, name, System.currentTimeMillis(), image?.path, items)
+                if (!projectsLoaded) loadProjects(context)
+                val record = HistoryRecord(id, name, System.currentTimeMillis(), image?.path, items, _currentProject.value)
                 val updated = listOf(record) + read(context)
                 write(context, updated)
                 _records.value = updated
@@ -141,6 +183,7 @@ object HistoryStore {
         put("name", record.name)
         put("createdAt", record.createdAt)
         put("image", record.imagePath ?: JSONObject.NULL)
+        put("project", record.project ?: JSONObject.NULL)
         put("items", JSONArray().apply {
             record.items.forEach { item ->
                 put(JSONObject().apply {
@@ -163,6 +206,7 @@ object HistoryStore {
             name = json.optString("name"),
             createdAt = json.optLong("createdAt"),
             imagePath = if (json.isNull("image")) null else json.optString("image"),
+            project = if (json.isNull("project") || !json.has("project")) null else json.optString("project"),
             items = (0 until items.length()).map { i ->
                 val item = items.getJSONObject(i)
                 MeasurementSummary(
@@ -240,6 +284,100 @@ object HistoryStore {
         var sample = 1
         while (bounds.outWidth / (sample * 2) >= targetWidth) sample *= 2
         BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+
+    /**
+     * A PDF report of [records] (a project): title, date, and per measurement its photo,
+     * name, time and values. Saved next to the photos so it can be shared.
+     */
+    suspend fun exportPdf(context: Context, title: String, records: List<HistoryRecord>, unit: MeasureUnit): File =
+        withContext(Dispatchers.IO) {
+            val doc = android.graphics.pdf.PdfDocument()
+            val pageW = 595
+            val pageH = 842
+            val margin = 40f
+            val ink = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B3B38.toInt() }
+            val muted = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF6B7F7C.toInt(); textSize = 10f }
+            val bold = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            var pageNo = 0
+            var page: android.graphics.pdf.PdfDocument.Page? = null
+            var y = 0f
+
+            fun newPage() {
+                page?.let(doc::finishPage)
+                pageNo++
+                page = doc.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(pageW, pageH, pageNo).create())
+                val c = page!!.canvas
+                c.drawRect(0f, 0f, pageW.toFloat(), 70f, android.graphics.Paint().apply { color = 0xFF0B3B38.toInt() })
+                c.drawText(title, margin, 38f, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFFFFFFFF.toInt(); textSize = 20f; typeface = bold
+                })
+                c.drawText(
+                    "MeasureAR report · " + java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date()),
+                    margin, 56f,
+                    android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1DE9D0.toInt(); textSize = 10f }
+                )
+                c.drawText("Built with ♥ by Jhani · page $pageNo", margin, pageH - 20f, muted)
+                y = 95f
+            }
+
+            newPage()
+            for (record in records.sortedBy { it.createdAt }) {
+                val blockH = 190f
+                if (y + blockH > pageH - 40f) newPage()
+                val c = page!!.canvas
+                // Photo
+                val photo = record.image?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+                val photoW = 96f
+                val photoH = 170f
+                if (photo != null) {
+                    val src = android.graphics.Rect(0, 0, photo.width, photo.height)
+                    val scale = minOf(photoW / photo.width, photoH / photo.height)
+                    val w = photo.width * scale
+                    val h = photo.height * scale
+                    c.drawBitmap(photo, src, android.graphics.RectF(margin, y, margin + w, y + h), null)
+                    photo.recycle()
+                }
+                // Text
+                val tx = margin + photoW + 18f
+                ink.textSize = 14f; ink.typeface = bold
+                c.drawText(record.name.take(60), tx, y + 16f, ink)
+                c.drawText(
+                    java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+                        .format(java.util.Date(record.createdAt)),
+                    tx, y + 32f, muted
+                )
+                ink.textSize = 12f; ink.typeface = android.graphics.Typeface.DEFAULT
+                var ty = y + 54f
+                record.items.forEach { item ->
+                    val value = com.jhani.measurear.measurement.formatValue(
+                        com.jhani.measurear.measurement.ResultValue(item.label ?: "", item.value, item.kind),
+                        item.isEstimate, unit
+                    )
+                    c.drawText("${item.label ?: if (item.isArea) "Area" else "Length"}:  $value", tx, ty, ink)
+                    ty += 18f
+                }
+                c.drawLine(margin, y + blockH - 10f, pageW - margin, y + blockH - 10f,
+                    android.graphics.Paint().apply { color = 0xFFE3ECEA.toInt(); strokeWidth = 1f })
+                y += blockH
+            }
+            page?.let(doc::finishPage)
+            val safe = title.replace(Regex("[^A-Za-z0-9 _-]"), "").trim().ifEmpty { "MeasureAR" }
+            val file = File(photoDir(context), "$safe.pdf")
+            file.outputStream().use(doc::writeTo)
+            doc.close()
+            file
+        }
+
+    /** Shares an exported PDF report. */
+    fun sharePdf(context: Context, file: File) {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share report"))
     }
 
     fun share(context: Context, record: HistoryRecord, unit: MeasureUnit) {

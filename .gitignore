@@ -21,3 +21,6 @@ keystore/
 keystore.properties
 *.jks
 *.keystore
+
+# Built release binaries (rebuild with gradlew assembleRelease / bundleRelease)
+store/release/

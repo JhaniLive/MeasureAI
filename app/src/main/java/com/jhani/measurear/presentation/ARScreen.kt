@@ -289,10 +289,10 @@ fun ARScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         when (val state = sessionState) {
-            is ARSessionState.SessionReady -> if (tool == Tool.LEVEL) {
-                LevelScreen()
+            is ARSessionState.SessionReady -> if (tool != Tool.MEASURE) {
+                if (tool == Tool.LEVEL) LevelScreen() else com.jhani.measurear.level.CompassScreen()
                 ToolTabs(
-                    selected = Tool.LEVEL,
+                    selected = tool,
                     onSelect = { tool = it },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -848,7 +848,7 @@ private fun MeasureControls(
 }
 
 /** Screens reachable from the bottom tabs. */
-enum class Tool { MEASURE, LEVEL }
+enum class Tool { MEASURE, LEVEL, COMPASS }
 
 /** Round translucent icon button with a small caption, used in the HUD. */
 @Composable
@@ -897,7 +897,8 @@ fun ToolTabs(selected: Tool, onSelect: (Tool) -> Unit, modifier: Modifier = Modi
     ) {
         listOf(
             Triple(Tool.MEASURE, R.drawable.ic_straighten, "Measure"),
-            Triple(Tool.LEVEL, R.drawable.ic_level, "Level")
+            Triple(Tool.LEVEL, R.drawable.ic_level, "Level"),
+            Triple(Tool.COMPASS, R.drawable.ic_compass, "Compass")
         ).forEach { (tool, icon, label) ->
             val isSelected = tool == selected
             Row(
@@ -905,7 +906,7 @@ fun ToolTabs(selected: Tool, onSelect: (Tool) -> Unit, modifier: Modifier = Modi
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (isSelected) HudTeal else Color.Transparent)
                     .clickable { onSelect(tool) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(

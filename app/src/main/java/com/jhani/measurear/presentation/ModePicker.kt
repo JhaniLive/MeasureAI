@@ -126,6 +126,21 @@ fun ModePickerSheet(
                     }
                     Spacer(Modifier.height(10.dp))
                 }
+                Text(
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        append("Built with ")
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFFF5A7A)))
+                        append("♥")
+                        pop()
+                        append(" by ")
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold))
+                        append("Jhani")
+                        pop()
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 2.dp, bottom = 4.dp),
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
             }
         }
     }

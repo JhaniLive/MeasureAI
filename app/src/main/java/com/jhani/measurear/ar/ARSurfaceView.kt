@@ -1399,6 +1399,7 @@ class ARSurfaceView(
     private fun publishNotTracking(camera: Camera) {
         sessionManager.publishUiState(
             MeasureUiState(
+                cameraReady = true,
                 isTracking = false,
                 trackingMessage = trackingMessage(camera.trackingFailureReason),
                 hasPendingPoint = sessionManager.pendingStart != null,
@@ -1478,6 +1479,7 @@ class ARSurfaceView(
 
         sessionManager.publishUiState(
             MeasureUiState(
+                cameraReady = true,
                 isTracking = true,
                 mode = sessionManager.mode,
                 draftCount = sessionManager.draft.size,

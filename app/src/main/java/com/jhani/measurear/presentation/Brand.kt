@@ -44,14 +44,17 @@ val BrandGlow = Color(0xFF12433E)
 
 /** Full-screen deep-teal backdrop with a soft glow behind the content. */
 @Composable
-fun BrandBackdrop(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun BrandBackdrop(modifier: Modifier = Modifier, credit: Boolean = true, content: @Composable () -> Unit) {
     Box(
         modifier
             .fillMaxSize()
             .background(BrandDeep)
             .background(Brush.radialGradient(listOf(BrandGlow, BrandDeep), radius = 1400f)),
         contentAlignment = Alignment.Center
-    ) { content() }
+    ) {
+        content()
+        if (credit) MadeWithLove(Modifier.align(Alignment.BottomCenter))
+    }
 }
 
 /**
@@ -107,6 +110,27 @@ private fun buildWordmark() = androidx.compose.ui.text.buildAnnotatedString {
     pushStyle(androidx.compose.ui.text.SpanStyle(color = HudTeal))
     append("AR")
     pop()
+}
+
+/** "Built with ♥ by Jhani", pinned to the bottom of branded screens. */
+@Composable
+fun MadeWithLove(modifier: Modifier = Modifier) {
+    Text(
+        androidx.compose.ui.text.buildAnnotatedString {
+            append("Built with ")
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFFF5A7A)))
+            append("♥")
+            pop()
+            append(" by ")
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold))
+            append("Jhani")
+            pop()
+        },
+        modifier = modifier.navigationBarsPadding().padding(bottom = 28.dp),
+        fontSize = 13.sp,
+        letterSpacing = 0.4.sp,
+        color = Color.White.copy(alpha = 0.55f)
+    )
 }
 
 /** Branded loading screen: animated logo, wordmark, tagline and a status line. */

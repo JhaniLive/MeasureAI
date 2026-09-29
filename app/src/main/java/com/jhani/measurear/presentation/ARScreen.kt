@@ -104,6 +104,15 @@ fun ARScreen(
     val sessionManager = remember { ARSessionManager(context) }
     val sessionState by sessionManager.sessionState.collectAsState()
     val ui by sessionManager.uiState.collectAsState()
+
+    // The branded loader stays up until the camera delivers frames (and at least briefly, so
+    // it never just flashes), then fades out over the live camera
+    var loaderMinShown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(1200)
+        loaderMinShown = true
+    }
+    val showLoader = !(ui.cameraReady && loaderMinShown)
     var unit by rememberSaveable { mutableStateOf(MeasureUnit.METRIC) }
     var tool by rememberSaveable { mutableStateOf(Tool.MEASURE) }
     var showGrid by rememberSaveable { mutableStateOf(true) }
@@ -448,6 +457,14 @@ fun ARScreen(
                     }
                 }
 
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showLoader,
+                    enter = androidx.compose.animation.EnterTransition.None,
+                    exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))
+                ) {
+                    BrandedLoader(status = "Starting the camera")
+                }
+
                 ModePickerSheet(
                     visible = showModes,
                     current = mode,
@@ -508,9 +525,7 @@ fun ARScreen(
                 }
             }
 
-            ARSessionState.Idle -> {
-                // Initial transient state before lifecycle resume triggers check
-            }
+            ARSessionState.Idle -> BrandedLoader(status = "Starting the camera")
         }
     }
 }

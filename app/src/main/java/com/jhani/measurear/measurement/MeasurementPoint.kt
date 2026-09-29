@@ -142,6 +142,8 @@ data class ScreenSegment(
  * Snapshot of the measuring session published from the GL thread to the UI every frame.
  */
 data class MeasureUiState(
+    /** The camera has delivered frames (false until the first one: the loader stays up). */
+    val cameraReady: Boolean = false,
     val isTracking: Boolean = false,
     val trackingMessage: String? = null,
     val reticle: ReticleState = ReticleState.SEARCHING,

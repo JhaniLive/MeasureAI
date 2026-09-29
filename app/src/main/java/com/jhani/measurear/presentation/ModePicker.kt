@@ -512,3 +512,37 @@ fun CalibrationDialog(
         }
     )
 }
+
+/**
+ * Live precision of the next point: "± 1.8 cm" with a 3-bar signal, teal on a detected
+ * surface up close, fewer bars farther away, amber for estimates.
+ */
+@Composable
+fun AccuracyMeter(error: Float, onSurface: Boolean, unit: MeasureUnit) {
+    val bars = when {
+        !onSurface -> 1
+        error <= 0.02f -> 3
+        error <= 0.04f -> 2
+        else -> 1
+    }
+    val color = if (onSurface) HudTeal else HudAmber
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "± " + com.jhani.measurear.measurement.formatLength(error, unit),
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.width(6.dp))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            (1..3).forEach { i ->
+                Box(
+                    Modifier
+                        .size(width = 4.dp, height = (4 + 4 * i).dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(if (i <= bars) color else Color.White.copy(alpha = 0.25f))
+                )
+            }
+        }
+    }
+}

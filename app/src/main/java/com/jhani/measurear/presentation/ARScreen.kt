@@ -369,6 +369,10 @@ fun ARScreen(
                 }
 
                 HudTopBar(
+                    aimError = if (ui.mode == MeasureMode.FAR) null else ui.targetMeters?.let {
+                        com.jhani.measurear.measurement.Uncertainty.pointError(it, ui.reticleReliable)
+                    },
+                    aimOnSurface = ui.reticleReliable,
                     mode = mode,
                     onModeClick = { showModes = true },
                     onToggleDebug = {
@@ -588,6 +592,8 @@ fun ARScreen(
  */
 @Composable
 private fun HudTopBar(
+    aimError: Float?,
+    aimOnSurface: Boolean,
     mode: MeasureMode,
     onModeClick: () -> Unit,
     onToggleDebug: () -> Unit,
@@ -648,6 +654,10 @@ private fun HudTopBar(
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
+                // How precise a point placed right now would be
+                if (targetMeters != null && aimError != null) {
+                    AccuracyMeter(error = aimError, onSurface = aimOnSurface, unit = unit)
+                }
             }
         }
         Spacer(modifier = Modifier.height(10.dp))

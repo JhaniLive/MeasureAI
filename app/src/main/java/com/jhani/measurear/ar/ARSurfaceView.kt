@@ -1157,8 +1157,8 @@ class ARSurfaceView(
         val anchor = plane?.createAnchor(point.toPose()) ?: session.createAnchor(point.toPose())
         if (draft.isEmpty()) {
             sessionManager.draftMode = mode
-            // The surface the shape lies on: the first point's plane, else level (floor/table)
-            sessionManager.draftNormal = plane?.normal() ?: Vec3.UP
+            // The surface the shape lies on: the first point's plane, else fitted through the points
+            sessionManager.draftNormal = plane?.normal()
         }
         draft.add(PlacedPoint(anchor, onSurface))
         if (mode == MeasureMode.DISTANCE) {
@@ -1203,7 +1203,7 @@ class ARSurfaceView(
         MeasurementSummary(value, isArea = kind == ValueKind.AREA, isEstimate = isEstimate, kind = kind, label = label)
 
     /** Distance mode stores [point, camera]; every other mode is just its points. */
-    private fun shapeResult(mode: MeasureMode, pts: List<Vec3>, normal: Vec3, camera: Vec3? = null): ShapeResult? =
+    private fun shapeResult(mode: MeasureMode, pts: List<Vec3>, normal: Vec3?, camera: Vec3? = null): ShapeResult? =
         if (mode == MeasureMode.DISTANCE) {
             val cam = pts.getOrNull(1) ?: camera
             if (cam == null) null else ShapeMath.compute(mode, pts.take(1), normal, cam)
@@ -1259,7 +1259,7 @@ class ARSurfaceView(
             val placed = draft.filter { it.anchor.trackingState == TrackingState.TRACKING }
             val next = nextShapePoint(reticle)
             val estimate = placed.any { !it.onSurface } || next?.second == false
-            val normal = if (draft.isEmpty()) reticle?.plane?.normal() ?: Vec3.UP else sessionManager.draftNormal
+            val normal = if (draft.isEmpty()) reticle?.plane?.normal() else sessionManager.draftNormal
             val r = if (mode == MeasureMode.DISTANCE) {
                 shapeResult(mode, listOfNotNull(next?.first), normal, cameraPose.toVec())
             } else {

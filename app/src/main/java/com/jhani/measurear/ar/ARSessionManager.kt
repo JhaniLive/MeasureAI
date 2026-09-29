@@ -127,7 +127,7 @@ class ARSessionManager(private val context: Context) {
     /** Points of the shape being placed, and the mode it was started in. GL thread only. */
     val draft = mutableListOf<PlacedPoint>()
     var draftMode: com.jhani.measurear.measurement.MeasureMode? = null
-    var draftNormal: com.jhani.measurear.measurement.Vec3 = com.jhani.measurear.measurement.Vec3.UP
+    var draftNormal: com.jhani.measurear.measurement.Vec3? = null
 
     /** Whether the session has the Depth API on (grid occlusion). Set at session creation. */
     @Volatile

@@ -58,6 +58,19 @@ class ShapeMathTest {
         assertEquals(6, r.labels.size) // every side labelled, including the closing one
     }
 
+    @Test fun areaOnWallWithoutDetectedSurface() {
+        // 0.4 × 0.3 m picture frame on a wall (vertical), placed from estimates: no surface normal
+        val pts = listOf(v(0f, 1f, -1f), v(0.4f, 1f, -1f), v(0.4f, 1.3f, -1f), v(0f, 1.3f, -1f))
+        val r = ShapeMath.compute(MeasureMode.AREA, pts, surfaceNormal = null)
+        assertEquals(0.12f, r.value("Area"), 1e-4f)
+    }
+
+    @Test fun rectangleOnWallWithoutDetectedSurface() {
+        val pts = listOf(v(0f, 1f, -1f), v(0.9f, 1f, -1f), v(0.9f, 3.1f, -1f))
+        val r = ShapeMath.compute(MeasureMode.RECTANGLE, pts, surfaceNormal = null)
+        assertEquals(0.9f * 2.1f, r.value("Area"), 1e-3f)
+    }
+
     @Test fun volumeBox() {
         val pts = listOf(v(0f, 0f, 0f), v(0.5f, 0f, 0f), v(0.5f, 0f, 0.4f), v(0.5f, 0.3f, 0f))
         val r = ShapeMath.compute(MeasureMode.VOLUME, pts)

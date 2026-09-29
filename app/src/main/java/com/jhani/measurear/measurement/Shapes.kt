@@ -49,11 +49,19 @@ object ShapeMath {
 
     /**
      * Result for [mode] from its points so far (a finished shape, or a draft with the live
-     * aim point appended). [normal] is the surface the shape lies on.
+     * aim point appended). [normal] is the detected surface the shape lies on, or null when
+     * it wasn't started on one: then the plane is fitted through the points themselves (a
+     * shape on a wall is not squashed flat onto the floor).
      *
      * @param camera camera position (Distance mode only)
      */
-    fun compute(mode: MeasureMode, pts: List<Vec3>, normal: Vec3 = Vec3.UP, camera: Vec3? = null): ShapeResult {
+    fun compute(mode: MeasureMode, pts: List<Vec3>, surfaceNormal: Vec3? = Vec3.UP, camera: Vec3? = null): ShapeResult {
+        // Boxes stand on the floor; everything else lies on its surface or its points' plane
+        val normal = when {
+            mode == MeasureMode.VOLUME -> surfaceNormal ?: Vec3.UP
+            surfaceNormal != null -> surfaceNormal
+            else -> Geometry.fitNormal(pts.take(if (mode == MeasureMode.RECTANGLE) 3 else pts.size)) ?: Vec3.UP
+        }
         fun len(label: String, v: Float) = ResultValue(label, v, ValueKind.LENGTH)
         fun edges(points: List<Vec3>, closed: Boolean): List<SceneLabel> {
             val list = if (closed && points.size > 2) points + points.first() else points
@@ -183,7 +191,8 @@ object ShapeMath {
 class MeasuredShape(
     val mode: MeasureMode,
     val points: List<PlacedPoint>,
-    val normal: Vec3
+    /** Detected surface's normal, or null to fit the plane through the points. */
+    val normal: Vec3?
 ) {
     val isEstimate: Boolean get() = points.any { !it.onSurface }
 }

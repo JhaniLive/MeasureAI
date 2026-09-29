@@ -390,7 +390,12 @@ private fun DrawScope.drawValueLabel(label: ScreenValueLabel, unit: MeasureUnit,
     val box = Size(layout.size.width + padH * 2, layout.size.height + padV * 2)
     // Angles sit just above their corner so the vertex stays visible
     val cy = if (isAngle) label.y - box.height else label.y
-    val topLeft = Offset(label.x - box.width / 2f, cy - box.height / 2f)
+    // Kept fully on screen so edge labels stay readable
+    val margin = 6.dp.toPx()
+    val topLeft = Offset(
+        (label.x - box.width / 2f).coerceIn(margin, (size.width - box.width - margin).coerceAtLeast(margin)),
+        cy - box.height / 2f
+    )
     val radius = CornerRadius(box.height / 2f)
     drawRoundRect(ShadowColor, topLeft + Offset(0f, 1.5.dp.toPx()), box, radius)
     if (isAngle) {

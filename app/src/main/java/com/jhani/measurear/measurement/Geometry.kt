@@ -65,6 +65,21 @@ object Geometry {
         return base + Vec3.UP * s
     }
 
+    /**
+     * Unit normal of the plane through [points] (Newell's method; exact for a planar polygon,
+     * best fit otherwise), or null when they are (nearly) collinear.
+     */
+    fun fitNormal(points: List<Vec3>): Vec3? {
+        if (points.size < 3) return null
+        var n = Vec3(0f, 0f, 0f)
+        for (i in points.indices) {
+            val a = points[i]
+            val b = points[(i + 1) % points.size]
+            n += Vec3((a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x), (a.x - b.x) * (a.y + b.y))
+        }
+        return if (n.length < 1e-6f) null else n.normalized()
+    }
+
     /** Orthonormal in-plane axes (u, v) for a plane with [normal]. */
     fun planeBasis(normal: Vec3): Pair<Vec3, Vec3> {
         val n = normal.normalized()

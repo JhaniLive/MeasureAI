@@ -390,7 +390,8 @@ private fun DrawScope.drawValueLabel(label: ScreenValueLabel, unit: MeasureUnit,
     val box = Size(layout.size.width + padH * 2, layout.size.height + padV * 2)
     // Angles sit just above their corner so the vertex stays visible
     val cy = if (isAngle) label.y - box.height else label.y
-    // Kept fully on screen so edge labels stay readable
+    // Hidden when its point is off screen (no pile-up at the edge); nudged fully on otherwise
+    if (label.x < 0f || label.x > size.width || label.y < 0f || label.y > size.height) return
     val margin = 6.dp.toPx()
     val topLeft = Offset(
         (label.x - box.width / 2f).coerceIn(margin, (size.width - box.width - margin).coerceAtLeast(margin)),

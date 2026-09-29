@@ -248,7 +248,12 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
     val step = when {
         draftCount == 0 -> mode.howTo
         needed != null -> "Point ${draftCount + 1} of $needed"
-        else -> "${draftCount} points · tap Done to finish"
+        draftCount < mode.minPoints -> {
+            val more = mode.minPoints - draftCount
+            "Point ${draftCount + 1} — $more more to go"
+        }
+        mode == MeasureMode.AREA -> "$draftCount corners · tap the first corner or Done"
+        else -> "$draftCount points · tap Done to finish"
     }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(

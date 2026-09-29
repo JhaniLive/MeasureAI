@@ -1267,7 +1267,10 @@ class ARSurfaceView(
             }
             if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE)) {
                 draw(r, estimate, live = true)
-                if (r.values.isNotEmpty()) result = ShapeResultUi(mode, r.values, estimate, isLive = true)
+            }
+            // While a shape is being placed, the card shows only that shape (never the last one)
+            if (draft.isNotEmpty() || (mode == MeasureMode.DISTANCE && r != null)) {
+                result = ShapeResultUi(mode, r?.values.orEmpty(), estimate, isLive = true)
             }
         }
         return ShapeUi(fills, labels, result, summaries)

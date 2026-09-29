@@ -54,10 +54,13 @@ fun MeasureOverlay(
     ui: MeasureUiState,
     unit: MeasureUnit,
     onLineTap: (Int) -> Unit,
+    /** Tap anywhere that isn't a line label: place a point there (view pixels). */
+    onScreenTap: (x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
     val currentOnLineTap by rememberUpdatedState(onLineTap)
+    val currentOnScreenTap by rememberUpdatedState(onScreenTap)
 
     // Label rectangles from the last draw, for tap hit-testing
     val labelHits = remember { ArrayList<Pair<Rect, Int>>() }
@@ -67,8 +70,12 @@ fun MeasureOverlay(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures { position ->
-                    labelHits.lastOrNull { it.first.inflate(8.dp.toPx()).contains(position) }
-                        ?.let { currentOnLineTap(it.second) }
+                    val label = labelHits.lastOrNull { it.first.inflate(8.dp.toPx()).contains(position) }
+                    if (label != null) {
+                        currentOnLineTap(label.second)
+                    } else {
+                        currentOnScreenTap(position.x, position.y)
+                    }
                 }
             }
     ) {

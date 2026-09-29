@@ -279,7 +279,12 @@ fun ARScreen(
                 )
 
                 // Lines, points, labels and reticle
-                MeasureOverlay(ui = ui, unit = unit, onLineTap = { selectedLine = it })
+                MeasureOverlay(
+                    ui = ui,
+                    unit = unit,
+                    onLineTap = { selectedLine = it },
+                    onScreenTap = { x, y -> sessionManager.requestAction(MeasureAction.AddPointAt(x, y)) }
+                )
 
                 // Scanning guide whenever ARCore has no surface to measure on
                 if (ui.surfaceCount == 0 && !ui.hasPendingPoint) {
@@ -291,16 +296,16 @@ fun ARScreen(
                 }
 
                 val guidanceText = when {
-                    !ui.isTracking -> ui.trackingMessage ?: "Move phone slowly to get started"
-                    ui.surfaceCount == 0 -> "Scanning — point down at a table or floor"
-                    ui.reticle == ReticleState.SEARCHING -> "Move phone slowly and aim at a surface"
+                    !ui.isTracking -> ui.trackingMessage ?: "Let's get started — move the phone slowly"
+                    ui.surfaceCount == 0 -> "Scanning with you — sweep slowly over a table or floor"
+                    ui.reticle == ReticleState.SEARCHING -> "Almost there — aim at the teal dots"
                     ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
                     ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
                     ui.reticle == ReticleState.ESTIMATE && !ui.reticleReliable ->
-                        "Not a detected surface — aim at the teal area"
-                    ui.hasPendingPoint -> "Move to the end point and stamp"
+                        "Not a detected surface — aim at the teal dots"
+                    ui.hasPendingPoint -> "Nice — now stamp or tap the end point"
                     ui.reticle == ReticleState.SNAPPED -> "Stamp to continue from this point"
-                    else -> "Aim at the start point and stamp"
+                    else -> "Ready — stamp, or tap a spot on the teal dots"
                 }
 
                 // Hold each message briefly so rapid state flicker doesn't overlap cross-fades

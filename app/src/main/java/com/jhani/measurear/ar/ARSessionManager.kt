@@ -42,6 +42,9 @@ sealed interface MeasureAction {
      * point can use where the reticle was *before* the press nudged the phone.
      */
     data class AddPoint(val pressedAtNanos: Long = System.nanoTime()) : MeasureAction
+
+    /** Place a point where the user tapped, at view pixel ([x], [y]). */
+    data class AddPointAt(val x: Float, val y: Float) : MeasureAction
     data object Undo : MeasureAction
     data object Clear : MeasureAction
 

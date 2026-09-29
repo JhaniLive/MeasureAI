@@ -361,20 +361,8 @@ class ARSurfaceView(
             )
         }
 
-        val cameraPose = frame.camera.pose
-        // Hits are sorted nearest first. A plane hit is only used when nothing is in front of
-        // it; otherwise an object (e.g. a cup) is occluding the plane and the nearer hit wins.
-        val hits = frame.hitTest(cx, cy).filter { it.distance <= MAX_HIT_DISTANCE }
-        val planeHit = hits.firstOrNull { it.isOnStablePlane(cameraPose) }
-        val estimateHit = hits.firstOrNull { it.isEstimate() }
-        // Prefer the plane unless an estimate is clearly in front of it (an object standing on
-        // the surface). Depth noise on the surface itself is a few cm, so the margin must be
-        // well above that or the plane keeps losing to noisy depth points on itself.
-        val usePlane = planeHit != null && (
-            estimateHit == null ||
-                planeHit.distance <= estimateHit.distance + max(OCCLUSION_TOLERANCE, planeHit.distance * OCCLUSION_RATIO)
-            )
-        val hit = if (usePlane) planeHit else estimateHit
+        val picked = pickHit(frame, cx, cy)
+        val hit = picked?.first
         lastHitKind = when (val t = hit?.trackable) {
             null -> "none"
             is Plane -> "PLANE"
@@ -388,7 +376,7 @@ class ARSurfaceView(
             return null
         }
 
-        val plane = if (usePlane) planeHit?.trackable as? Plane else null
+        val plane = picked.second
 
         // Estimates at object edges can grab the background's depth: refine from neighbors
         var rawPose = hit.hitPose
@@ -408,6 +396,52 @@ class ARSurfaceView(
             snappedTo = null,
             onSurface = plane != null,
             ambiguous = ambiguous
+        )
+    }
+
+    /**
+     * Hit tests screen position ([x], [y]) and picks the hit to measure at, with its plane when
+     * the hit is on a detected surface (null plane = only a depth / feature-point estimate).
+     */
+    private fun pickHit(frame: Frame, x: Float, y: Float): Pair<HitResult, Plane?>? {
+        val cameraPose = frame.camera.pose
+        // Hits are sorted nearest first. A plane hit is only used when nothing is in front of
+        // it; otherwise an object (e.g. a cup) is occluding the plane and the nearer hit wins.
+        val hits = frame.hitTest(x, y).filter { it.distance <= MAX_HIT_DISTANCE }
+        val planeHit = hits.firstOrNull { it.isOnStablePlane(cameraPose) }
+        val estimateHit = hits.firstOrNull { it.isEstimate() }
+        // Prefer the plane unless an estimate is clearly in front of it (an object standing on
+        // the surface). Depth noise on the surface itself is a few cm, so the margin must be
+        // well above that or the plane keeps losing to noisy depth points on itself.
+        val usePlane = planeHit != null && (
+            estimateHit == null ||
+                planeHit.distance <= estimateHit.distance + max(OCCLUSION_TOLERANCE, planeHit.distance * OCCLUSION_RATIO)
+            )
+        return when {
+            usePlane -> planeHit!! to planeHit.trackable as Plane
+            estimateHit != null -> estimateHit to null
+            else -> null
+        }
+    }
+
+    /**
+     * Target for a tap at ([x], [y]): an existing endpoint near the finger, else a detected
+     * surface under it. Estimates are not offered: taps only place reliable points.
+     */
+    private fun tapTarget(frame: Frame, x: Float, y: Float): ReticleTarget? {
+        snapTarget(x, y)?.let { point ->
+            return ReticleTarget(
+                point.anchor.pose, ReticleState.SNAPPED,
+                plane = null, snappedTo = point, onSurface = point.onSurface
+            )
+        }
+        val (hit, plane) = pickHit(frame, x, y) ?: return null
+        return ReticleTarget(
+            pose = hit.hitPose,
+            state = if (plane != null) ReticleState.SURFACE else ReticleState.ESTIMATE,
+            plane = plane,
+            snappedTo = null,
+            onSurface = plane != null
         )
     }
 
@@ -722,6 +756,12 @@ class ARSurfaceView(
         while (true) {
             when (val action = sessionManager.pollAction() ?: return) {
                 is MeasureAction.AddPoint -> addPoint(session, frame, reticleAt(action.pressedAtNanos, reticle))
+                is MeasureAction.AddPointAt ->
+                    if (reticle == null && frame.camera.trackingState != TrackingState.TRACKING) {
+                        sessionManager.showHint("Hold on — still finding my bearings. Move the phone slowly")
+                    } else {
+                        addPoint(session, frame, tapTarget(frame, action.x, action.y), fromTap = true)
+                    }
                 MeasureAction.Undo -> sessionManager.undo()
                 MeasureAction.Clear -> {
                     sessionManager.clearAll()
@@ -837,15 +877,23 @@ class ARSurfaceView(
         return before?.second ?: current
     }
 
-    private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?) {
-        if (reticle == null) {
-            sessionManager.showHint("Aim the circle at a surface first")
-            return
-        }
+    private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?, fromTap: Boolean = false) {
         // Without a depth sensor, estimates can be off by tens of centimeters: only measure on
         // detected surfaces (or lines locked vertical from one)
-        if (!reticle.onSurface) {
-            sessionManager.showHint("Aim at a detected surface — the crosshair turns teal")
+        if (reticle == null || !reticle.onSurface) {
+            sessionManager.showHint(
+                when {
+                    surfaceCount == 0 -> "No surface yet — sweep the phone slowly over a table, floor or wall"
+                    fromTap -> "That spot isn't on a detected surface — tap on the teal dots"
+                    else -> "Not on a detected surface yet — move the crosshair onto the teal dots"
+                }
+            )
+            post {
+                performHapticFeedback(
+                    if (android.os.Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT
+                    else HapticFeedbackConstants.LONG_PRESS
+                )
+            }
             return
         }
 

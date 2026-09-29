@@ -925,12 +925,27 @@ class ARSurfaceView(
      */
     private fun reticleAt(pressedAtNanos: Long, current: ReticleTarget?): ReticleTarget? {
         val cutoff = pressedAtNanos - PRESS_LEAD_NANOS
-        val before = reticleHistory.lastOrNull { it.first <= cutoff }
-        // Only trust history that still aims at something; otherwise fall back to now
-        return before?.second ?: current
+        val before = reticleHistory.lastOrNull { it.first <= cutoff }?.second ?: return current
+        // The pre-press aim avoids the nudge from the thumb, but if only the current aim is
+        // usable (it just reached the surface or snapped vertical), use that instead
+        if (current == null) return before
+        return if (usable(current) && !usable(before)) current else before
+    }
+
+    /** Whether a point could be placed at [target] given the pending start point. */
+    private fun usable(target: ReticleTarget): Boolean {
+        val pending = sessionManager.pendingStart
+        return if (pending != null && !pending.onSurface) target.replaceStart != null else target.onSurface
     }
 
     private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?, fromTap: Boolean = false) {
+        Log.i(
+            "Stamp",
+            "${if (fromTap) "tap" else "stamp"} target=${reticle?.state} onSurface=${reticle?.onSurface} " +
+                "axis=${reticle?.axis} replaceStart=${reticle?.replaceStart != null} " +
+                "pending=${sessionManager.pendingStart?.let { if (it.onSurface) "surface" else "top" }} " +
+                "aim=$lastHitKind surfaces=$surfaceCount"
+        )
         val pending = sessionManager.pendingStart
         // Top of an object (bottle, box) as the start of a height: its depth is never used, only
         // its line of sight, which is intersected with the vertical above a base on the surface

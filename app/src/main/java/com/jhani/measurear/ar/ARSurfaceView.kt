@@ -119,6 +119,15 @@ class ARSurfaceView(
         private const val OCCLUSION_TOLERANCE = 0.08f
         private const val OCCLUSION_RATIO = 0.12f
 
+        // Extending a detected table patch: how far beyond it (m), and how closely the depth
+        // estimate must agree with the extended plane's distance (m / fraction of distance)
+        private const val EXTEND_MAX = 0.6f
+        private const val EXTEND_TOLERANCE = 0.04f
+        private const val EXTEND_RATIO = 0.06f
+
+        // Vertical snap window when the aim isn't on a surface (top of a bottle, box…)
+        private const val VERTICAL_SNAP_WIDE_DP = 70f
+
         // Edge-robust estimates: center + two rings (dp offsets) of hit-test samples
         private val EDGE_SAMPLE_OFFSETS: List<FloatArray> = buildList {
             add(floatArrayOf(0f, 0f))
@@ -362,27 +371,27 @@ class ARSurfaceView(
         }
 
         val picked = pickHit(frame, cx, cy)
-        val hit = picked?.first
-        lastHitKind = when (val t = hit?.trackable) {
-            null -> "none"
-            is Plane -> "PLANE"
-            is DepthPoint -> "depth"
-            is Point -> "feature"
-            else -> t.javaClass.simpleName
+        lastHitKind = when {
+            picked == null -> "none"
+            picked.extended -> "PLANE (extended)"
+            picked.plane != null -> "PLANE"
+            picked.hit.trackable is DepthPoint -> "depth"
+            picked.hit.trackable is Point -> "feature"
+            else -> picked.hit.trackable.javaClass.simpleName
         }
-        lastHitDistance = hit?.distance ?: 0f
-        if (hit == null) {
+        lastHitDistance = picked?.distance ?: 0f
+        if (picked == null) {
             reticleFilter.reset()
             return null
         }
 
-        val plane = picked.second
+        val plane = picked.plane
 
         // Estimates at object edges can grab the background's depth: refine from neighbors
-        var rawPose = hit.hitPose
+        var rawPose = picked.pose
         var ambiguous = false
         if (plane == null) {
-            robustEstimate(frame, cx, cy, hit)?.let { (pose, isAmbiguous) ->
+            robustEstimate(frame, cx, cy, picked.hit)?.let { (pose, isAmbiguous) ->
                 rawPose = pose
                 ambiguous = isAmbiguous
             }
@@ -400,10 +409,14 @@ class ARSurfaceView(
     }
 
     /**
-     * Hit tests screen position ([x], [y]) and picks the hit to measure at, with its plane when
-     * the hit is on a detected surface (null plane = only a depth / feature-point estimate).
+     * Where a hit test lands: [plane] is set when the position is on a detected surface (null =
+     * only a depth / feature-point estimate). [hit] is the ARCore hit it came from; for an
+     * [extended] plane that's the estimate that confirmed the surface is there.
      */
-    private fun pickHit(frame: Frame, x: Float, y: Float): Pair<HitResult, Plane?>? {
+    private class Pick(val pose: Pose, val distance: Float, val plane: Plane?, val hit: HitResult, val extended: Boolean = false)
+
+    /** Hit tests screen position ([x], [y]) and picks where to measure. */
+    private fun pickHit(frame: Frame, x: Float, y: Float): Pick? {
         val cameraPose = frame.camera.pose
         // Hits are sorted nearest first. A plane hit is only used when nothing is in front of
         // it; otherwise an object (e.g. a cup) is occluding the plane and the nearer hit wins.
@@ -418,15 +431,52 @@ class ARSurfaceView(
                 planeHit.distance <= estimateHit.distance + max(OCCLUSION_TOLERANCE, planeHit.distance * OCCLUSION_RATIO)
             )
         return when {
-            usePlane -> planeHit!! to planeHit.trackable as Plane
-            estimateHit != null -> estimateHit to null
+            usePlane -> Pick(planeHit!!.hitPose, planeHit.distance, planeHit.trackable as Plane, planeHit)
+            estimateHit != null -> extendedPlanePick(estimateHit, cameraPose)
+                ?: Pick(estimateHit.hitPose, estimateHit.distance, null, estimateHit)
             else -> null
         }
     }
 
     /**
-     * Target for a tap at ([x], [y]): an existing endpoint near the finger, else a detected
-     * surface under it. Estimates are not offered: taps only place reliable points.
+     * ARCore often detects only patches of a plain table. Just outside a detected horizontal
+     * patch the same table continues at the same height: intersect the line of sight with the
+     * patch's plane, but only where the depth estimate agrees a surface is really there at
+     * that distance (so points never float in the air past a table edge).
+     */
+    private fun extendedPlanePick(estimateHit: HitResult, cameraPose: Pose): Pick? {
+        val o = floatArrayOf(cameraPose.tx(), cameraPose.ty(), cameraPose.tz())
+        val e = estimateHit.hitPose
+        val d = floatArrayOf(e.tx() - o[0], e.ty() - o[1], e.tz() - o[2])
+        normalize(d)
+        var best: Pick? = null
+        val planes = sessionManager.session?.getAllTrackables(Plane::class.java) ?: return null
+        for (plane in planes) {
+            if (plane.trackingState != TrackingState.TRACKING || plane.subsumedBy != null ||
+                plane.type != Plane.Type.HORIZONTAL_UPWARD_FACING ||
+                plane.extentX < MIN_PLANE_EXTENT || plane.extentZ < MIN_PLANE_EXTENT
+            ) continue
+            val c = plane.centerPose
+            val n = FloatArray(3)
+            c.getTransformedAxis(1, 1f, n, 0)
+            val denom = n[0] * d[0] + n[1] * d[1] + n[2] * d[2]
+            if (denom > -0.05f) continue // looking along or from below the surface
+            val t = (n[0] * (c.tx() - o[0]) + n[1] * (c.ty() - o[1]) + n[2] * (c.tz() - o[2])) / denom
+            if (t <= 0f || t > MAX_HIT_DISTANCE) continue
+            if (abs(t - estimateHit.distance) > max(EXTEND_TOLERANCE, t * EXTEND_RATIO)) continue
+            val q = floatArrayOf(o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t)
+            val fromCenter = sqrt((q[0] - c.tx()).let { it * it } + (q[2] - c.tz()).let { it * it })
+            if (fromCenter > max(plane.extentX, plane.extentZ) / 2f + EXTEND_MAX) continue
+            if (best == null || t < best.distance) {
+                best = Pick(Pose(q, c.rotationQuaternion), t, plane, estimateHit, extended = true)
+            }
+        }
+        return best
+    }
+
+    /**
+     * Target for a tap at ([x], [y]): an existing endpoint near the finger, else what the hit
+     * test picks under it.
      */
     private fun tapTarget(frame: Frame, x: Float, y: Float): ReticleTarget? {
         snapTarget(x, y)?.let { point ->
@@ -435,13 +485,13 @@ class ARSurfaceView(
                 plane = null, snappedTo = point, onSurface = point.onSurface
             )
         }
-        val (hit, plane) = pickHit(frame, x, y) ?: return null
+        val picked = pickHit(frame, x, y) ?: return null
         return ReticleTarget(
-            pose = hit.hitPose,
-            state = if (plane != null) ReticleState.SURFACE else ReticleState.ESTIMATE,
-            plane = plane,
+            pose = picked.pose,
+            state = if (picked.plane != null) ReticleState.SURFACE else ReticleState.ESTIMATE,
+            plane = picked.plane,
             snappedTo = null,
-            onSurface = plane != null
+            onSurface = picked.plane != null
         )
     }
 
@@ -577,7 +627,10 @@ class ARSurfaceView(
         val lineLength = hypot(lx, ly)
         if (lineLength < 1f) return null // looking straight down the vertical line
         val screenDistance = abs(lx * (sa[1] - cy) - ly * (sa[0] - cx)) / lineLength
-        if (screenDistance > VERTICAL_SNAP_DP * density) return null
+        // Aiming off any surface (the top of an object), a vertical is the only reliable
+        // measurement from A, so snap to it from farther away
+        val window = if (base?.onSurface == true) VERTICAL_SNAP_DP else VERTICAL_SNAP_WIDE_DP
+        if (screenDistance > window * density) return null
 
         val ray = centerRay() ?: return null
         val origin = ray[0]

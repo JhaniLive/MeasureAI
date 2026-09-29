@@ -234,16 +234,39 @@ enum class MeasureUnit { METRIC, IMPERIAL }
  */
 fun formatLength(meters: Float, unit: MeasureUnit): String = when (unit) {
     MeasureUnit.METRIC -> if (meters >= 1f) "%.2f m".format(meters) else "%.1f cm".format(meters * 100f)
-    MeasureUnit.IMPERIAL -> {
-        val totalInches = meters * 39.3701f
-        if (totalInches < 12f) {
-            "%.1f in".format(totalInches)
-        } else {
-            val feet = (totalInches / 12f).toInt()
-            "%d' %.1f\"".format(feet, totalInches - feet * 12f)
-        }
-    }
+    MeasureUnit.IMPERIAL -> formatFeetInches(meters)
 }
+
+/**
+ * Imperial lengths the way a tape measure reads them: whole inches plus a fraction rounded
+ * to the nearest 1/16 (reduced: 8/16 → ½), with feet above 12 inches — "5 ⅜″", "3′ 4 ½″".
+ */
+fun formatFeetInches(meters: Float): String {
+    val sixteenths = Math.round(meters * 39.37008f * 16f)
+    val feet = sixteenths / (12 * 16)
+    val rest = sixteenths - feet * 12 * 16
+    val inches = rest / 16
+    var num = rest % 16
+    var den = 16
+    while (num != 0 && num % 2 == 0) {
+        num /= 2
+        den /= 2
+    }
+    val fraction = if (num == 0) "" else FRACTIONS["$num/$den"] ?: "$num/$den"
+    val inchPart = when {
+        fraction.isEmpty() -> "$inches″"
+        inches == 0 && feet == 0 -> "$fraction″"
+        inches == 0 -> "0 $fraction″"
+        else -> "$inches $fraction″"
+    }
+    return if (feet > 0) "$feet′ $inchPart" else inchPart
+}
+
+/** Unicode vulgar fractions where they exist (others stay "3/16"). */
+private val FRACTIONS = mapOf(
+    "1/2" to "½", "1/4" to "¼", "3/4" to "¾",
+    "1/8" to "⅛", "3/8" to "⅜", "5/8" to "⅝", "7/8" to "⅞"
+)
 
 /**
  * Measurement length. Estimates (off a detected surface) get "≈" and their typical error:

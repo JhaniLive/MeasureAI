@@ -5,14 +5,17 @@ import com.google.ar.core.Pose
 import kotlin.math.sqrt
 
 /**
- * A placed measurement endpoint.
+ * A placed measurement endpoint. Dragging moves it in place (new anchor), so every line and
+ * shape that uses it follows. Compared by identity.
  *
  * @param onSurface true when placed on a tracked plane (most accurate); false when it came
  * from a depth / feature-point estimate, which is less reliable without a depth sensor
+ * @param draggable false for points fixed by geometry (tops of heights, where you stood)
  */
-data class PlacedPoint(
-    val anchor: Anchor,
-    val onSurface: Boolean
+class PlacedPoint(
+    var anchor: Anchor,
+    var onSurface: Boolean,
+    val draggable: Boolean = true
 )
 
 /**

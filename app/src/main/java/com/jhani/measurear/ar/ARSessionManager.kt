@@ -48,6 +48,11 @@ sealed interface MeasureAction {
 
     /** Finish an open-ended shape (Path, Area) with the points placed so far. */
     data object FinishShape : MeasureAction
+
+    /** Finger drag of a placed point, in view pixels. */
+    data class DragStart(val x: Float, val y: Float) : MeasureAction
+    data class DragMove(val x: Float, val y: Float) : MeasureAction
+    data object DragEnd : MeasureAction
     data object Undo : MeasureAction
     data object Clear : MeasureAction
 

@@ -288,7 +288,10 @@ fun ARScreen(
                     ui = ui,
                     unit = unit,
                     onLineTap = { selectedLine = it },
-                    onScreenTap = { x, y -> sessionManager.requestAction(MeasureAction.AddPointAt(x, y)) }
+                    onScreenTap = { x, y -> sessionManager.requestAction(MeasureAction.AddPointAt(x, y)) },
+                    onDragStart = { x, y -> sessionManager.requestAction(MeasureAction.DragStart(x, y)) },
+                    onDrag = { x, y -> sessionManager.requestAction(MeasureAction.DragMove(x, y)) },
+                    onDragEnd = { sessionManager.requestAction(MeasureAction.DragEnd) }
                 )
 
                 // Scanning guide whenever ARCore has no surface to measure on

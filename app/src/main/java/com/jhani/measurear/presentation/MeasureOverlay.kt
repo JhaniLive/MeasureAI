@@ -2,6 +2,7 @@ package com.jhani.measurear.presentation
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,7 +47,10 @@ val HudTealDark = Color(0xFF0B3B38)
 val HudAmber = Color(0xFFFFD60A)
 
 private val ShadowColor = Color.Black.copy(alpha = 0.35f)
-private val EstimateLabelColor = Color(0xFFD0D0D0)
+// Labels: light and see-through so the scene stays visible behind them
+private val LabelColor = Color.White.copy(alpha = 0.72f)
+private val EstimateLabelColor = Color(0xFFE6E6E6).copy(alpha = 0.55f)
+private val LabelText = Color(0xFF1C2322)
 
 /**
  * 2D HUD overlay drawn on top of the camera: measurement lines, endpoints, distance labels,
@@ -60,11 +64,18 @@ fun MeasureOverlay(
     onLineTap: (Int) -> Unit,
     /** Tap anywhere that isn't a line label: place a point there (view pixels). */
     onScreenTap: (x: Float, y: Float) -> Unit,
+    /** Finger drag (view pixels): starting on a placed point moves it. */
+    onDragStart: (x: Float, y: Float) -> Unit = { _, _ -> },
+    onDrag: (x: Float, y: Float) -> Unit = { _, _ -> },
+    onDragEnd: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
     val currentOnLineTap by rememberUpdatedState(onLineTap)
     val currentOnScreenTap by rememberUpdatedState(onScreenTap)
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
 
     // Label rectangles from the last draw, for tap hit-testing
     val labelHits = remember { ArrayList<Pair<Rect, Int>>() }
@@ -72,6 +83,14 @@ fun MeasureOverlay(
     Canvas(
         modifier = modifier
             .fillMaxSize()
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { currentOnDragStart(it.x, it.y) },
+                    onDrag = { change, _ -> currentOnDrag(change.position.x, change.position.y) },
+                    onDragEnd = { currentOnDragEnd() },
+                    onDragCancel = { currentOnDragEnd() }
+                )
+            }
             .pointerInput(Unit) {
                 detectTapGestures { position ->
                     val label = labelHits.lastOrNull { it.first.inflate(8.dp.toPx()).contains(position) }
@@ -164,25 +183,19 @@ private fun DrawScope.drawLabel(segment: ScreenSegment, unit: MeasureUnit, textM
 
     val layout = textMeasurer.measure(
         text = formatDistance(segment.meters, segment.isEstimate, unit),
-        style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = LabelText)
     )
-    val padH = 10.dp.toPx()
-    val padV = 5.dp.toPx()
+    val padH = 8.dp.toPx()
+    val padV = 3.dp.toPx()
     val boxSize = Size(layout.size.width + padH * 2, layout.size.height + padV * 2)
     val center = Offset((segment.startX + segment.endX) / 2f, (segment.startY + segment.endY) / 2f)
     val topLeft = Offset(center.x - boxSize.width / 2f, center.y - boxSize.height / 2f)
 
     val background = when {
-        segment.isLive -> HudTeal
+        segment.isLive -> HudTeal.copy(alpha = 0.8f)
         segment.isEstimate -> EstimateLabelColor
-        else -> Color.White
+        else -> LabelColor
     }
-    drawRoundRect(
-        color = ShadowColor,
-        topLeft = topLeft + Offset(0f, 1.5.dp.toPx()),
-        size = boxSize,
-        cornerRadius = CornerRadius(boxSize.height / 2f)
-    )
     drawRoundRect(
         color = background,
         topLeft = topLeft,
@@ -256,13 +269,13 @@ private fun DrawScope.drawAreaFill(area: ScreenArea) {
 private fun DrawScope.drawAreaLabel(area: ScreenArea, unit: MeasureUnit, textMeasurer: TextMeasurer) {
     val layout = textMeasurer.measure(
         text = formatArea(area.squareMeters, area.isEstimate, unit),
-        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = HudTeal)
+        style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HudTeal)
     )
-    val padH = 12.dp.toPx()
-    val padV = 6.dp.toPx()
+    val padH = 10.dp.toPx()
+    val padV = 4.dp.toPx()
     val boxSize = Size(layout.size.width + padH * 2, layout.size.height + padV * 2)
     val topLeft = Offset(area.centerX - boxSize.width / 2f, area.centerY - boxSize.height / 2f)
-    drawRoundRect(HudTealDark.copy(alpha = 0.92f), topLeft, boxSize, CornerRadius(boxSize.height / 2f))
+    drawRoundRect(HudTealDark.copy(alpha = 0.65f), topLeft, boxSize, CornerRadius(boxSize.height / 2f))
     drawRoundRect(
         HudTeal, topLeft, boxSize, CornerRadius(boxSize.height / 2f),
         style = Stroke(1.5.dp.toPx())
@@ -383,10 +396,10 @@ private fun DrawScope.drawValueLabel(label: ScreenValueLabel, unit: MeasureUnit,
     val isAngle = label.value.kind == ValueKind.ANGLE
     val layout = textMeasurer.measure(
         text = formatValue(label.value, label.isEstimate, unit),
-        style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isAngle) HudTeal else Color.Black)
+        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isAngle) HudTeal else LabelText)
     )
-    val padH = 9.dp.toPx()
-    val padV = 4.dp.toPx()
+    val padH = 8.dp.toPx()
+    val padV = 3.dp.toPx()
     val box = Size(layout.size.width + padH * 2, layout.size.height + padV * 2)
     // Angles sit just above their corner so the vertex stays visible
     val cy = if (isAngle) label.y - box.height else label.y
@@ -398,12 +411,11 @@ private fun DrawScope.drawValueLabel(label: ScreenValueLabel, unit: MeasureUnit,
         cy - box.height / 2f
     )
     val radius = CornerRadius(box.height / 2f)
-    drawRoundRect(ShadowColor, topLeft + Offset(0f, 1.5.dp.toPx()), box, radius)
     if (isAngle) {
-        drawRoundRect(HudTealDark.copy(alpha = 0.92f), topLeft, box, radius)
-        drawRoundRect(HudTeal, topLeft, box, radius, style = Stroke(1.5.dp.toPx()))
+        drawRoundRect(HudTealDark.copy(alpha = 0.7f), topLeft, box, radius)
+        drawRoundRect(HudTeal.copy(alpha = 0.8f), topLeft, box, radius, style = Stroke(1.dp.toPx()))
     } else {
-        drawRoundRect(if (label.isEstimate) EstimateLabelColor else Color.White, topLeft, box, radius)
+        drawRoundRect(if (label.isEstimate) EstimateLabelColor else LabelColor, topLeft, box, radius)
     }
     drawText(layout, topLeft = Offset(topLeft.x + padH, topLeft.y + padV))
 }

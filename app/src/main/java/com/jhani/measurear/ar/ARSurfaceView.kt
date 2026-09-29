@@ -144,6 +144,9 @@ class ARSurfaceView(
         // Vertical snap window when the aim isn't on a surface (top of a bottle, box…)
         private const val VERTICAL_SNAP_WIDE_DP = 70f
 
+        // How close (dp) a finger must land to a point to drag it
+        private const val DRAG_RADIUS_DP = 40f
+
         // Edge-robust estimates: center + two rings (dp offsets) of hit-test samples
         private val EDGE_SAMPLE_OFFSETS: List<FloatArray> = buildList {
             add(floatArrayOf(0f, 0f))
@@ -346,6 +349,7 @@ class ARSurfaceView(
             val tLoupe = System.nanoTime()
 
             applyActions(session, frame, reticle)
+            updateDrag(session, frame)
             publishTracking(reticle, camera.pose)
 
             val tEnd = System.nanoTime()
@@ -839,6 +843,9 @@ class ARSurfaceView(
                         addShapePoint(session, frame, reticleAt(action.pressedAtNanos, reticle), fromTap = false)
                     }
                 MeasureAction.FinishShape -> finishShape()
+                is MeasureAction.DragStart -> startDrag(action.x, action.y)
+                is MeasureAction.DragMove -> dragTo = floatArrayOf(action.x, action.y)
+                MeasureAction.DragEnd -> endDrag()
                 is MeasureAction.AddPointAt ->
                     if (reticle == null && frame.camera.trackingState != TrackingState.TRACKING) {
                         sessionManager.showHint("Hold on — still finding my bearings. Move the phone slowly")
@@ -1066,6 +1073,56 @@ class ARSurfaceView(
     }
 
     // ---------------------------------------------------------------------------------------
+    // Dragging placed points
+    // ---------------------------------------------------------------------------------------
+
+    private var dragging: PlacedPoint? = null
+    private var dragTo: FloatArray? = null
+    private var dragApplied: FloatArray? = null
+
+    /** Every point the user can drag: line endpoints and shape corners. */
+    private fun draggablePoints(): List<PlacedPoint> = buildList {
+        sessionManager.lines.forEach { add(it.start); add(it.end) }
+        sessionManager.pendingStart?.let(::add)
+        sessionManager.shapes.forEach { addAll(it.points) }
+        addAll(sessionManager.draft)
+    }.filter { it.draggable && it.anchor.trackingState == TrackingState.TRACKING }
+
+    private fun startDrag(x: Float, y: Float) {
+        val radius = DRAG_RADIUS_DP * density
+        dragging = draggablePoints()
+            .mapNotNull { p -> projectToScreen(p.anchor.pose)?.let { p to hypot(it[0] - x, it[1] - y) } }
+            .filter { it.second <= radius }
+            .minByOrNull { it.second }
+            ?.first
+        dragTo = null
+        dragApplied = null
+        if (dragging != null) post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+    }
+
+    /** Moves the dragged point onto whatever is under the finger this frame. */
+    private fun updateDrag(session: Session, frame: Frame) {
+        val point = dragging ?: return
+        val to = dragTo ?: return
+        val last = dragApplied
+        if (last != null && hypot(to[0] - last[0], to[1] - last[1]) < 1f) return
+        val pick = pickHit(frame, to[0], to[1]) ?: return
+        val anchor = pick.plane?.createAnchor(pick.pose) ?: session.createAnchor(pick.pose)
+        pointRays.remove(point.anchor)
+        point.anchor.detach()
+        point.anchor = anchor
+        point.onSurface = pick.plane != null
+        dragApplied = to
+    }
+
+    private fun endDrag() {
+        if (dragging != null) post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+        dragging = null
+        dragTo = null
+        dragApplied = null
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Shape modes (everything except Line)
     // ---------------------------------------------------------------------------------------
 
@@ -1160,10 +1217,10 @@ class ARSurfaceView(
             // The surface the shape lies on: the first point's plane, else fitted through the points
             sessionManager.draftNormal = plane?.normal()
         }
-        draft.add(PlacedPoint(anchor, onSurface))
+        draft.add(PlacedPoint(anchor, onSurface, draggable = !vertical && mode != MeasureMode.DISTANCE))
         if (mode == MeasureMode.DISTANCE) {
             // Keep where the user stood, so the distance stays fixed after they move
-            draft.add(PlacedPoint(session.createAnchor(frame.camera.pose), onSurface = true))
+            draft.add(PlacedPoint(session.createAnchor(frame.camera.pose), onSurface = true, draggable = false))
         }
         post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
 

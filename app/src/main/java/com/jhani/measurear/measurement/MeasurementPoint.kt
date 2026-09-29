@@ -135,7 +135,9 @@ data class ScreenSegment(
     /** Index into the completed lines, or -1 for the live segment / guides. */
     val lineIndex: Int = -1,
     /** Draw the length pill on this segment (off for shape outlines; they use scene labels). */
-    val labelled: Boolean = true
+    val labelled: Boolean = true,
+    /** Tape-measure ticks along the segment: x, y, major (1/0) triples in view pixels. */
+    val ticks: FloatArray? = null
 )
 
 /**

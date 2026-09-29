@@ -108,6 +108,7 @@ fun MeasureOverlay(
         ui.fills.forEach { drawShapeFill(it) }
         ui.guide?.let { drawGuide(it) }
         ui.segments.forEach { drawSegment(it) }
+        ui.segments.forEach { drawTicks(it) }
 
         if (ui.hasPendingPoint && ui.pendingVisible) {
             drawEndpoint(Offset(ui.pendingX, ui.pendingY))
@@ -419,4 +420,27 @@ private fun DrawScope.drawValueLabel(label: ScreenValueLabel, unit: MeasureUnit,
         drawRoundRect(if (label.isEstimate) EstimateLabelColor else LabelColor, topLeft, box, radius)
     }
     drawText(layout, topLeft = Offset(topLeft.x + padH, topLeft.y + padV))
+}
+
+/** Tape-measure ticks along a segment: short marks on one side, longer at major steps. */
+private fun DrawScope.drawTicks(segment: ScreenSegment) {
+    val t = segment.ticks ?: return
+    val dx = segment.endX - segment.startX
+    val dy = segment.endY - segment.startY
+    val len = kotlin.math.hypot(dx, dy)
+    if (len < 1f) return
+    // Perpendicular, pointing "up" on screen so ticks sit above the line
+    var px = -dy / len
+    var py = dx / len
+    if (py > 0) { px = -px; py = -py }
+    val minor = 4.dp.toPx()
+    val major = 8.dp.toPx()
+    val w = 1.2.dp.toPx()
+    val color = Color.White.copy(alpha = 0.85f)
+    var i = 0
+    while (i + 2 < t.size) {
+        val l = if (t[i + 2] > 0.5f) major else minor
+        drawLine(color, Offset(t[i], t[i + 1]), Offset(t[i] + px * l, t[i + 1] + py * l), strokeWidth = w, cap = StrokeCap.Round)
+        i += 3
+    }
 }

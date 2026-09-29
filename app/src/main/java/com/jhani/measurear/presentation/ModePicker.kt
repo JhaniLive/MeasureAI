@@ -241,6 +241,17 @@ fun ModeIllustration(mode: MeasureMode, modifier: Modifier = Modifier, compact: 
                 line(p(0.4f, 0.15f), p(0.6f, 0.15f))
                 dots(0.5f to 0.85f, 0.5f to 0.15f)
             }
+            MeasureMode.FIT -> {
+                // A sofa-sized box standing on the floor, with a check mark
+                line(p(0.05f, 0.86f), p(0.95f, 0.86f), color = floor)
+                val (a, b, c, d) = listOf(p(0.14f, 0.74f), p(0.62f, 0.8f), p(0.86f, 0.68f), p(0.4f, 0.62f))
+                val up = Offset(0f, -h * 0.26f)
+                poly(listOf(a + up, b + up, c + up, d + up))
+                poly(listOf(a, b, b + up, a + up))
+                poly(listOf(b, c, c + up, b + up))
+                line(p(0.62f, 0.2f), p(0.7f, 0.28f), color = Color.White)
+                line(p(0.7f, 0.28f), p(0.86f, 0.1f), color = Color.White)
+            }
             MeasureMode.CALIBRATE -> {
                 // A card with its long edge measured
                 drawRoundRect(HudTeal.copy(alpha = 0.22f), p(0.18f, 0.3f), Size(w * 0.64f, h * 0.4f),
@@ -545,4 +556,131 @@ fun AccuracyMeter(error: Float, onSurface: Boolean, unit: MeasureUnit) {
             }
         }
     }
+}
+
+/** Will it fit?: size of the box under the result, with rotate buttons for a placed box. */
+@Composable
+fun FitControls(spec: com.jhani.measurear.measurement.BoxSpec, unit: MeasureUnit, onSize: () -> Unit, onRotate: (Float) -> Unit) {
+    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FitButton("⟲") { onRotate(-15f) }
+        Text(
+            "${spec.name} · ${fmt(spec.width)} × ${fmt(spec.depth)} × ${fmt(spec.height)}  ▾",
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.Black.copy(alpha = 0.55f))
+                .border(1.dp, HudTeal, RoundedCornerShape(16.dp))
+                .clickable(onClick = onSize)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+        FitButton("⟳") { onRotate(15f) }
+    }
+}
+
+@Composable
+private fun FitButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(38.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, HudTeal.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Text(label, color = HudTeal, fontSize = 18.sp) }
+}
+
+/** Pick a furniture preset or type a custom W × D × H (in the current unit). */
+@Composable
+fun FitSizeDialog(
+    current: com.jhani.measurear.measurement.BoxSpec,
+    unit: MeasureUnit,
+    onPick: (com.jhani.measurear.measurement.BoxSpec) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val toUnit = if (unit == MeasureUnit.METRIC) 100f else 39.37008f
+    val unitLabel = if (unit == MeasureUnit.METRIC) "cm" else "in"
+    fun show(m: Float) = if (unit == MeasureUnit.METRIC) "%.0f".format(m * toUnit) else "%.1f".format(m * toUnit)
+    var w by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(show(current.width)) }
+    var d by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(show(current.depth)) }
+    var ht by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(show(current.height)) }
+    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF0E1614),
+        title = { Text("What do you want to fit?", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                com.jhani.measurear.measurement.BoxSpec.PRESETS.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                        row.forEach { preset ->
+                            Column(
+                                Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (preset == current) HudTealDark else CardColor)
+                                    .border(1.dp, if (preset == current) HudTeal else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .clickable { onPick(preset) }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(preset.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "${fmt(preset.width)} × ${fmt(preset.depth)} × ${fmt(preset.height)}",
+                                    color = Color.White.copy(alpha = 0.55f), fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Or your own size ($unitLabel)", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(Triple("Width", w) { v: String -> w = v }, Triple("Depth", d) { v: String -> d = v }, Triple("Height", ht) { v: String -> ht = v })
+                        .forEach { (label, value, set) ->
+                            androidx.compose.material3.OutlinedTextField(
+                                value = value,
+                                onValueChange = { set(it.filter { c -> c.isDigit() || c == '.' }.take(6)) },
+                                label = { Text(label, fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                                ),
+                                modifier = Modifier.weight(1f),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = HudTeal,
+                                    focusedLabelColor = HudTeal
+                                )
+                            )
+                        }
+                }
+            }
+        },
+        confirmButton = {
+            val custom = listOf(w, d, ht).map { it.toFloatOrNull()?.div(toUnit) }
+            val valid = custom.all { it != null && it in 0.01f..10f }
+            Text(
+                "Use my size",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (valid) HudTeal else HudTeal.copy(alpha = 0.3f))
+                    .clickable(enabled = valid) { onPick(com.jhani.measurear.measurement.BoxSpec(custom[0]!!, custom[1]!!, custom[2]!!)) }
+                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                color = Color.Black,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        dismissButton = {
+            Text(
+                "Close",
+                modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
+                color = Color.White.copy(alpha = 0.7f)
+            )
+        }
+    )
 }

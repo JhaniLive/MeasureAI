@@ -49,6 +49,12 @@ sealed interface MeasureAction {
     /** Finish an open-ended shape (Path, Area) with the points placed so far. */
     data object FinishShape : MeasureAction
 
+    /** Will it fit?: rotate the last placed box about the vertical (degrees). */
+    data class RotateBox(val degrees: Float) : MeasureAction
+
+    /** Will it fit?: give the last placed box the current [ARSessionManager.fitSpec]. */
+    data object ResizeBox : MeasureAction
+
     /** Finger drag of a placed point, in view pixels. */
     data class DragStart(val x: Float, val y: Float) : MeasureAction
     data class DragMove(val x: Float, val y: Float) : MeasureAction
@@ -142,6 +148,14 @@ class ARSessionManager(private val context: Context) {
     fun emitCalibration(sample: CalibrationSample) {
         _calibration.tryEmit(sample)
     }
+
+    /** Will it fit?: size of the next box to place. UI writes, GL reads. */
+    @Volatile
+    var fitSpec: com.jhani.measurear.measurement.BoxSpec = com.jhani.measurear.measurement.BoxSpec.PRESETS[0]
+
+    /** Imperial units selected (tape ticks in inches/feet). UI writes, GL reads. */
+    @Volatile
+    var imperial: Boolean = false
 
     /** Far mode: phone height above the ground when no ground is detected. UI writes, GL reads. */
     @Volatile

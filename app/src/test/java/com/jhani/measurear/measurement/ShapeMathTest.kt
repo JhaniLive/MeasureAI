@@ -86,6 +86,26 @@ class ShapeMathTest {
         assertEquals(5f, r.value("Distance to base"), 1e-4f)
     }
 
+    @Test fun fitBoxCornersAndValues() {
+        val sofa = BoxSpec(2f, 0.9f, 0.85f, "Sofa")
+        val r = ShapeMath.compute(MeasureMode.FIT, listOf(v(1f, 0f, -2f)), box = sofa, yawDegrees = 0f)
+        assertEquals(1.8f, r.value("Footprint"), 1e-4f)
+        assertEquals(2f, r.value("Width"), 1e-4f)
+        assertEquals(6, r.paths.size)
+        val c = ShapeMath.boxCorners(v(1f, 0f, -2f), sofa, 0f)
+        assertEquals(2f, c[0].distanceTo(c[1]), 1e-4f)      // width along x
+        assertEquals(0.9f, c[1].distanceTo(c[2]), 1e-4f)    // depth along z
+        assertEquals(0.85f, c[4].y - c[0].y, 1e-4f)         // height up
+    }
+
+    @Test fun fitBoxRotationKeepsSize() {
+        val box = BoxSpec(1.2f, 0.6f, 0.75f)
+        val c = ShapeMath.boxCorners(v(0f, 0f, 0f), box, 37f)
+        assertEquals(1.2f, c[0].distanceTo(c[1]), 1e-4f)
+        assertEquals(0.6f, c[1].distanceTo(c[2]), 1e-4f)
+        assertEquals(0f, c[0].y, 1e-6f)
+    }
+
     @Test fun volumeBox() {
         val pts = listOf(v(0f, 0f, 0f), v(0.5f, 0f, 0f), v(0.5f, 0f, 0.4f), v(0.5f, 0.3f, 0f))
         val r = ShapeMath.compute(MeasureMode.VOLUME, pts)
@@ -96,7 +116,7 @@ class ShapeMathTest {
     }
 
     @Test fun draftsWithTooFewPointsAreEmpty() {
-        for (mode in MeasureMode.values()) {
+        for (mode in MeasureMode.values().filter { it != MeasureMode.FIT }) {
             val r = ShapeMath.compute(mode, emptyList(), camera = v(0f, 0f, 0f))
             assertTrue(mode.name, r.values.isEmpty())
         }

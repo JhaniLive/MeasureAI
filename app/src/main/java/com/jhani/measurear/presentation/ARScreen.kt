@@ -117,6 +117,7 @@ fun ARScreen(
     }
     val showLoader = !(ui.cameraReady && loaderMinShown)
     var unit by rememberSaveable { mutableStateOf(MeasureUnit.METRIC) }
+    LaunchedEffect(unit) { sessionManager.imperial = unit == MeasureUnit.IMPERIAL }
     var tool by rememberSaveable { mutableStateOf(Tool.MEASURE) }
     var showGrid by rememberSaveable { mutableStateOf(true) }
 
@@ -135,6 +136,11 @@ fun ARScreen(
         }
     }
     var showPhoneHeight by remember { mutableStateOf(false) }
+    // Will it fit?: chosen box size, and the size picker
+    var fitSpec by remember { mutableStateOf(com.jhani.measurear.measurement.BoxSpec.PRESETS[0]) }
+    LaunchedEffect(fitSpec) { sessionManager.fitSpec = fitSpec }
+    var showFitSize by remember { mutableStateOf(false) }
+    LaunchedEffect(mode) { if (mode == MeasureMode.FIT) showFitSize = true }
     // Calibration factor for this session, and a finished calibration measurement to confirm
     var scale by rememberSaveable { mutableStateOf(1f) }
     LaunchedEffect(scale) { sessionManager.scale = scale }
@@ -434,6 +440,9 @@ fun ARScreen(
                 }
 
                 MeasureControls(
+                    fitSpec = fitSpec,
+                    onFitSize = { showFitSize = true },
+                    onRotateBox = { sessionManager.requestAction(MeasureAction.RotateBox(it)) },
                     groundDetected = ui.groundDetected,
                     phoneHeight = ui.phoneHeight,
                     onPhoneHeightClick = { showPhoneHeight = true },
@@ -493,6 +502,22 @@ fun ARScreen(
                     exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))
                 ) {
                     BrandedLoader(status = "Starting the camera")
+                }
+
+                if (showFitSize) {
+                    FitSizeDialog(
+                        current = fitSpec,
+                        unit = unit,
+                        onPick = {
+                            fitSpec = it
+                            showFitSize = false
+                            // Also resize a box that's already placed
+                            sessionManager.fitSpec = it
+                            sessionManager.requestAction(MeasureAction.ResizeBox)
+                            hint = "Tap the teal floor to place the ${it.name.lowercase()}"
+                        },
+                        onDismiss = { showFitSize = false }
+                    )
                 }
 
                 if (showPhoneHeight) {
@@ -762,6 +787,9 @@ private fun UnitToggle(unit: MeasureUnit, onUnitChange: (MeasureUnit) -> Unit, m
  */
 @Composable
 private fun MeasureControls(
+    fitSpec: com.jhani.measurear.measurement.BoxSpec,
+    onFitSize: () -> Unit,
+    onRotateBox: (Float) -> Unit,
     groundDetected: Boolean,
     phoneHeight: Float,
     onPhoneHeightClick: () -> Unit,
@@ -809,6 +837,10 @@ private fun MeasureControls(
         } else {
             if (mode == MeasureMode.FAR) {
                 GroundChip(groundDetected, phoneHeight, unit, onPhoneHeightClick)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (mode == MeasureMode.FIT) {
+                FitControls(fitSpec, unit, onSize = onFitSize, onRotate = onRotateBox)
                 Spacer(modifier = Modifier.height(8.dp))
             }
             ResultCard(result = result, mode = mode, draftCount = draftCount, unit = unit)

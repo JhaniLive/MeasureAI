@@ -33,6 +33,7 @@ import com.jhani.measurear.measurement.StraightenMode
 import com.jhani.measurear.measurement.distanceBetween
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import com.jhani.measurear.measurement.BoxSpec
 import com.jhani.measurear.measurement.Geometry
 import com.jhani.measurear.measurement.MeasureMode
 import com.jhani.measurear.measurement.MeasuredShape
@@ -888,6 +889,10 @@ class ARSurfaceView(
                         addShapePoint(session, frame, reticleAt(action.pressedAtNanos, reticle), fromTap = false)
                     }
                 MeasureAction.FinishShape -> finishShape()
+                is MeasureAction.RotateBox -> sessionManager.shapes.lastOrNull { it.mode == MeasureMode.FIT }
+                    ?.let { it.yawDegrees = (it.yawDegrees + action.degrees) % 360f }
+                MeasureAction.ResizeBox -> sessionManager.shapes.lastOrNull { it.mode == MeasureMode.FIT }
+                    ?.let { it.box = sessionManager.fitSpec }
                 is MeasureAction.DragStart -> startDrag(action.x, action.y)
                 is MeasureAction.DragMove -> dragTo = floatArrayOf(action.x, action.y)
                 MeasureAction.DragEnd -> endDrag()
@@ -1298,6 +1303,11 @@ class ARSurfaceView(
             }
         }
 
+        if (mode == MeasureMode.FIT && target?.onSurface != true) {
+            sessionManager.showHint("Aim at the teal floor to place the box")
+            post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+            return
+        }
         val vertical = isVerticalStep(mode, draft.size)
         val tap = if (fromTap) floatArrayOf(tapX, tapY) else null
         val (point, onSurface) = nextShapePoint(if (vertical) null else target, tap) ?: run {
@@ -1333,6 +1343,53 @@ class ARSurfaceView(
         }
     }
 
+    /** Box yaw so its width runs across the view (its front faces the camera). */
+    private fun facingYaw(cameraPose: Pose): Float {
+        val f = FloatArray(3)
+        cameraPose.getTransformedAxis(2, -1f, f, 0) // camera looks along -Z
+        return Math.toDegrees(kotlin.math.atan2(-f[0].toDouble(), f[2].toDouble())).toFloat()
+    }
+
+    /**
+     * Tape-measure ticks along a world segment, projected to the screen: the finest spacing
+     * (1 cm, 5 cm, 10 cm, 50 cm, 1 m; or 1 in, 6 in, 1 ft, 5 ft) whose ticks stay ≥ 7 dp apart.
+     */
+    private fun tapeTicks(start: Pose, end: Pose, screenLength: Float): FloatArray? {
+        val length = distanceBetween(start, end)
+        if (length < 0.01f || screenLength < 40f * density) return null
+        val k = sessionManager.scale
+        val realLength = length * k
+        val pxPerMeter = screenLength / realLength
+        val steps = if (sessionManager.imperial) {
+            listOf(0.0254f to 12, 0.1524f to 2, 0.3048f to 5, 1.524f to 2)
+        } else {
+            listOf(0.01f to 10, 0.05f to 10, 0.1f to 10, 0.5f to 2, 1f to 10)
+        }
+        val (step, majorEvery) = steps.firstOrNull { it.first * pxPerMeter >= 7f * density } ?: return null
+        val n = (realLength / step).toInt()
+        if (n < 1 || n > 400) return null
+        val out = FloatArray(n * 3)
+        var count = 0
+        for (i in 1..n) {
+            val t = (i * step) / realLength
+            if (t >= 0.999f) break
+            val p = Pose(
+                floatArrayOf(
+                    start.tx() + (end.tx() - start.tx()) * t,
+                    start.ty() + (end.ty() - start.ty()) * t,
+                    start.tz() + (end.tz() - start.tz()) * t
+                ),
+                floatArrayOf(0f, 0f, 0f, 1f)
+            )
+            val sp = projectToScreen(p) ?: continue
+            out[count * 3] = sp[0]
+            out[count * 3 + 1] = sp[1]
+            out[count * 3 + 2] = if (i % majorEvery == 0) 1f else 0f
+            count++
+        }
+        return if (count == 0) null else out.copyOf(count * 3)
+    }
+
     /** Turns the draft into a finished shape (Done, or the last point of a fixed-size mode). */
     private fun finishShape() {
         val mode = sessionManager.draftMode ?: return
@@ -1352,10 +1409,24 @@ class ARSurfaceView(
             sessionManager.discardDraft()
             return
         }
-        val shape = MeasuredShape(mode, draft.toList(), sessionManager.draftNormal)
+        val shape = if (mode == MeasureMode.FIT) {
+            MeasuredShape(
+                mode, draft.toList(), Vec3.UP,
+                box = sessionManager.fitSpec,
+                yawDegrees = lastCameraPose?.let(::facingYaw) ?: 0f
+            )
+        } else {
+            MeasuredShape(mode, draft.toList(), sessionManager.draftNormal)
+        }
         sessionManager.shapes.add(shape)
         draft.clear()
         sessionManager.draftMode = null
+        if (mode == MeasureMode.FIT) {
+            // A placed box isn't a measurement: no History entry
+            sessionManager.showHint("Drag the box's center dot to move it; rotate with ⟲ ⟳")
+            post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+            return
+        }
         shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal)
             ?.values?.firstOrNull()
             ?.let { sessionManager.emitCompleted(mode.title, it.toSummary(shape.isEstimate)) }
@@ -1376,22 +1447,31 @@ class ARSurfaceView(
         pts: List<Vec3>,
         normal: Vec3?,
         camera: Vec3? = null,
-        estimate: Boolean = false
+        estimate: Boolean = false,
+        box: BoxSpec? = null,
+        yaw: Float = 0f
     ): ShapeResult? {
-        // Calibration correction: scaling the points scales lengths, areas and volumes alike.
-        // Calibrate itself is always measured raw.
-        val k = if (mode == MeasureMode.CALIBRATE) 1f else sessionManager.scale
-        val p = if (k == 1f) pts else pts.map { it * k }
-        val c = camera?.let { it * k }
-        return if (mode == MeasureMode.FAR) {
+        fun compute(p: List<Vec3>, c: Vec3?, b: BoxSpec?): ShapeResult? = when (mode) {
             // A typed-in phone height is known to ~15 cm; a detected ground to ~2 cm
-            ShapeMath.compute(mode, p, normal, c, phoneHeightError = if (estimate) 0.15f else 0.02f)
-        } else if (mode == MeasureMode.DISTANCE) {
-            val cam = p.getOrNull(1) ?: c
-            if (cam == null) null else ShapeMath.compute(mode, p.take(1), normal, cam)
-        } else {
-            ShapeMath.compute(mode, p, normal)
+            MeasureMode.FAR -> ShapeMath.compute(mode, p, normal, c, phoneHeightError = if (estimate) 0.15f else 0.02f)
+            MeasureMode.DISTANCE -> {
+                val cam = p.getOrNull(1) ?: c
+                if (cam == null) null else ShapeMath.compute(mode, p.take(1), normal, cam)
+            }
+            else -> ShapeMath.compute(mode, p, normal, box = b, yawDegrees = yaw)
         }
+        // Calibration: values come from the scaled points (lengths × k, areas × k², volumes
+        // × k³) but the outline is drawn where the points really are. A box has a real size,
+        // so in world units it is size / k. Calibrate itself is always raw.
+        val k = if (mode == MeasureMode.CALIBRATE) 1f else sessionManager.scale
+        if (k == 1f) return compute(pts, camera, box)
+        val world = compute(pts, camera, box?.let { BoxSpec(it.width / k, it.depth / k, it.height / k, it.name) }) ?: return null
+        val scaled = compute(pts.map { it * k }, camera?.let { it * k }, box) ?: return null
+        return ShapeResult(
+            world.paths, world.fill,
+            world.labels.zip(scaled.labels) { w, v -> w.copy(value = v.value) },
+            scaled.values
+        )
     }
 
     private class ShapeUi(
@@ -1408,11 +1488,17 @@ class ARSurfaceView(
         val summaries = ArrayList<MeasurementSummary>()
         var result: ShapeResultUi? = null
 
-        fun draw(r: ShapeResult, estimate: Boolean, live: Boolean) {
+        fun draw(r: ShapeResult, estimate: Boolean, live: Boolean, mode: MeasureMode) {
+            val taped = mode == MeasureMode.HEIGHT || mode == MeasureMode.PATH
             for (path in r.paths) {
                 path.zipWithNext { a, b ->
                     projectSegment(a.toPose(), b.toPose(), estimate, isLive = live)
-                        ?.copy(labelled = false)
+                        ?.let { seg ->
+                            seg.copy(
+                                labelled = false,
+                                ticks = if (taped) tapeTicks(a.toPose(), b.toPose(), hypot(seg.endX - seg.startX, seg.endY - seg.startY)) else null
+                            )
+                        }
                         ?.let(segments::add)
                 }
             }
@@ -1428,10 +1514,13 @@ class ARSurfaceView(
         }
 
         for (shape in sessionManager.shapes) {
-            val r = shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal, estimate = shape.isEstimate) ?: continue
+            val r = shapeResult(
+                shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal,
+                estimate = shape.isEstimate, box = shape.box, yaw = shape.yawDegrees
+            ) ?: continue
             r.values.firstOrNull()?.let { summaries.add(it.toSummary(shape.isEstimate)) }
             if (shape.points.any { it.anchor.trackingState != TrackingState.TRACKING }) continue
-            draw(r, shape.isEstimate, live = false)
+            draw(r, shape.isEstimate, live = false, mode = shape.mode)
             if (shape.mode == sessionManager.mode) result = ShapeResultUi(shape.mode, r.values, shape.isEstimate, isLive = false)
         }
 
@@ -1445,6 +1534,11 @@ class ARSurfaceView(
             val normal = if (draft.isEmpty()) reticle?.plane?.normal() else sessionManager.draftNormal
             val r = if (mode == MeasureMode.DISTANCE) {
                 shapeResult(mode, listOfNotNull(next?.first), normal, cameraPose.toVec())
+            } else if (mode == MeasureMode.FIT) {
+                // Ghost box where it would go (only on a detected surface)
+                next?.takeIf { it.second }?.let {
+                    shapeResult(mode, listOf(it.first), Vec3.UP, box = sessionManager.fitSpec, yaw = facingYaw(cameraPose))
+                }
             } else if (mode == MeasureMode.FAR) {
                 // Before the base is placed: preview the base with the camera where it is now
                 val placedPts = placed.map { it.anchor.pose.toVec() }
@@ -1452,8 +1546,8 @@ class ARSurfaceView(
             } else {
                 shapeResult(mode, placed.map { it.anchor.pose.toVec() } + listOfNotNull(next?.first), normal)
             }
-            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR)) {
-                draw(r, estimate, live = true)
+            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR || mode == MeasureMode.FIT)) {
+                draw(r, estimate, live = true, mode = mode)
             }
             // While a shape is being placed, the card shows only that shape (never the last one)
             if (draft.isNotEmpty() || ((mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR) && r != null)) {
@@ -1492,7 +1586,12 @@ class ARSurfaceView(
                 return@forEachIndexed
             }
             projectSegment(line.start.anchor.pose, line.end.anchor.pose, line.isEstimate, isLive = false)
-                ?.copy(lineIndex = index)
+                ?.let { seg ->
+                    seg.copy(
+                        lineIndex = index,
+                        ticks = tapeTicks(line.start.anchor.pose, line.end.anchor.pose, hypot(seg.endX - seg.startX, seg.endY - seg.startY))
+                    )
+                }
                 ?.let(segments::add)
         }
 

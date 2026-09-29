@@ -25,6 +25,7 @@ enum class MeasureMode(
     CIRCLE("Circle", "Tap the center, then a point on the edge", 2),
     AREA("Area", "Tap each corner, then back on the first to close", null, minPoints = 3),
     VOLUME("Volume", "Tap three corners of the base, then tilt up to the top", 4),
+    FIT("Will it fit?", "Pick a size, then tap the floor to place a life-size box — drag to move it", 1),
     CALIBRATE("Calibrate", "Lay a bank card flat on the teal dots, then tap both ends of its long edge", 2, inPicker = false)
 }
 
@@ -68,7 +69,10 @@ object ShapeMath {
         surfaceNormal: Vec3? = Vec3.UP,
         camera: Vec3? = null,
         /** Far mode: how well the phone's height above the ground is known (m). */
-        phoneHeightError: Float = 0.02f
+        phoneHeightError: Float = 0.02f,
+        /** Will it fit?: box size and rotation. */
+        box: BoxSpec? = null,
+        yawDegrees: Float = 0f
     ): ShapeResult {
         // Boxes stand on the floor; everything else lies on its surface or its points' plane
         val normal = when {
@@ -195,6 +199,27 @@ object ShapeMath {
                 )
             }
 
+            MeasureMode.FIT -> {
+                val c = pts.firstOrNull() ?: return empty
+                val spec = box ?: return empty
+                val corners = boxCorners(c, spec, yawDegrees)
+                val base = corners.take(4)
+                val top = corners.drop(4)
+                val paths = listOf(base + base.first(), top + top.first()) + base.indices.map { listOf(base[it], top[it]) }
+                ShapeResult(
+                    paths, base,
+                    listOf(
+                        SceneLabel((base[0] + base[1]) * 0.5f, len("Width", spec.width)),
+                        SceneLabel((base[1] + base[2]) * 0.5f, len("Depth", spec.depth)),
+                        SceneLabel((base[2] + top[2]) * 0.5f, len("Height", spec.height))
+                    ),
+                    listOf(
+                        ResultValue("Footprint", spec.width * spec.depth, ValueKind.AREA),
+                        len("Width", spec.width), len("Depth", spec.depth), len("Height", spec.height)
+                    )
+                )
+            }
+
             MeasureMode.VOLUME -> {
                 if (pts.size < 2) return empty
                 if (pts.size == 2) return ShapeResult(listOf(pts), null, edges(pts, false), emptyList())
@@ -220,6 +245,18 @@ object ShapeMath {
         }
     }
 
+    /**
+     * The 8 corners of a box standing on the floor at [center] (bottom center), rotated
+     * [yawDegrees] about the vertical: bottom 4 (counter-clockwise), then the top 4 above them.
+     */
+    fun boxCorners(center: Vec3, box: BoxSpec, yawDegrees: Float): List<Vec3> {
+        val a = Math.toRadians(yawDegrees.toDouble())
+        val u = Vec3(cos(a).toFloat(), 0f, sin(a).toFloat()) * (box.width / 2f)
+        val v = Vec3(-sin(a).toFloat(), 0f, cos(a).toFloat()) * (box.depth / 2f)
+        val bottom = listOf(center - u - v, center + u - v, center + u + v, center - u + v)
+        return bottom + bottom.map { it + Vec3.UP * box.height }
+    }
+
     /** Points around a circle of [radius] at [center] in the plane with [normal]. */
     fun circle(center: Vec3, radius: Float, normal: Vec3): List<Vec3> {
         val (u, v) = Geometry.planeBasis(normal)
@@ -238,7 +275,27 @@ class MeasuredShape(
     val mode: MeasureMode,
     val points: List<PlacedPoint>,
     /** Detected surface's normal, or null to fit the plane through the points. */
-    val normal: Vec3?
+    val normal: Vec3?,
+    /** Will it fit?: the virtual box's real size, and its rotation about the vertical. */
+    var box: BoxSpec? = null,
+    var yawDegrees: Float = 0f
 ) {
     val isEstimate: Boolean get() = points.any { !it.onSurface }
+}
+
+/** A real-world box size (meters) for Will it fit?, with a name for presets. */
+data class BoxSpec(val width: Float, val depth: Float, val height: Float, val name: String = "Custom") {
+    companion object {
+        /** Common furniture and appliances (typical sizes, meters). */
+        val PRESETS = listOf(
+            BoxSpec(2.00f, 0.90f, 0.85f, "3-seat sofa"),
+            BoxSpec(1.98f, 1.52f, 0.50f, "Queen bed"),
+            BoxSpec(1.50f, 0.90f, 0.75f, "Dining table"),
+            BoxSpec(1.20f, 0.60f, 0.75f, "Desk"),
+            BoxSpec(0.70f, 0.70f, 1.80f, "Fridge"),
+            BoxSpec(0.60f, 0.60f, 0.85f, "Washing machine"),
+            BoxSpec(1.23f, 0.08f, 0.71f, "55\" TV"),
+            BoxSpec(1.00f, 0.60f, 2.00f, "Wardrobe")
+        )
+    }
 }

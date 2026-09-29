@@ -303,7 +303,7 @@ fun ARScreen(
                     ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
                     ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
                     ui.reticle == ReticleState.ESTIMATE && !ui.reticleReliable ->
-                        "Not a detected surface — aim at the teal dots"
+                        "Approximate here (≈) — on the teal dots it's exact"
                     ui.hasPendingPoint -> "Nice — now stamp or tap the end point"
                     ui.reticle == ReticleState.SNAPPED -> "Stamp to continue from this point"
                     else -> "Ready — stamp, or tap a spot on the teal dots"
@@ -387,7 +387,7 @@ fun ARScreen(
                     liveIsEstimate = ui.liveIsEstimate,
                     snapAxis = ui.snapAxis,
                     unit = unit,
-                    canAdd = ui.isTracking && ui.reticleReliable,
+                    canAdd = ui.isTracking && ui.reticle != ReticleState.SEARCHING,
                     canUndo = ui.hasPendingPoint || ui.lineCount > 0,
                     onUndo = { sessionManager.requestAction(MeasureAction.Undo) },
                     onAdd = { pressedAt -> sessionManager.requestAction(MeasureAction.AddPoint(pressedAt)) },

@@ -203,10 +203,11 @@ fun formatLength(meters: Float, unit: MeasureUnit): String = when (unit) {
 }
 
 /**
- * Measurement length with "≈" prefix for estimates.
+ * Measurement length. Estimates (off a detected surface) get "≈" and their typical error:
+ * about ±15% on this class of phone without a depth sensor.
  */
 fun formatDistance(meters: Float, isEstimate: Boolean, unit: MeasureUnit): String =
-    (if (isEstimate) "≈ " else "") + formatLength(meters, unit)
+    if (isEstimate) "≈ " + formatLength(meters, unit) + " ±15%" else formatLength(meters, unit)
 
 /**
  * Area: cm² / m² or in² / ft², with "≈" for estimates.

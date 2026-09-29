@@ -958,26 +958,13 @@ class ARSurfaceView(
                 "pending=${sessionManager.pendingStart?.let { if (it.onSurface) "surface" else "top" }} " +
                 "aim=$lastHitKind surfaces=$surfaceCount extend=[$lastExtendReason]"
         )
-        val pending = sessionManager.pendingStart
-        // Top of an object (bottle, box) as the start of a height: its depth is never used, only
-        // its line of sight, which is intersected with the vertical above a base on the surface
-        val heightTop = reticle != null && !reticle.onSurface && pending == null &&
-            reticle.snappedTo == null && reticle.axis == null && surfaceCount > 0
-        // A height from a top point must end on the surface right below it
-        if (pending != null && !pending.onSurface && reticle?.replaceStart == null) {
-            sessionManager.showHint("Now aim at the table right at the bottom of the object — the line snaps vertical")
-            post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
-            return
-        }
-        // Without a depth sensor, estimates can be off by tens of centimeters: only measure on
-        // detected surfaces (or lines locked vertical from one)
-        if (!heightTop && (reticle == null || !reticle.onSurface)) {
+        // Off a detected surface the point is an estimate (shown with ≈ and a ± range). The
+        // top of an object keeps its line of sight, so a height finished on a surface below
+        // it is corrected to exact geometry and never uses the top's own depth.
+        if (reticle == null) {
             sessionManager.showHint(
-                when {
-                    surfaceCount == 0 -> "No surface yet — sweep the phone slowly over a table, floor or wall"
-                    fromTap -> "That spot isn't on a detected surface — tap on the teal dots"
-                    else -> "Not on a detected surface yet — move the crosshair onto the teal dots"
-                }
+                if (surfaceCount == 0) "Nothing to measure on yet — sweep the phone slowly over a table or floor"
+                else "Nothing under the crosshair — aim at the object or the teal dots"
             )
             post {
                 performHapticFeedback(
@@ -987,7 +974,8 @@ class ARSurfaceView(
             }
             return
         }
-        reticle ?: return
+        val heightTop = !reticle.onSurface && sessionManager.pendingStart == null &&
+            reticle.snappedTo == null && reticle.axis == null && surfaceCount > 0
 
         val point = if (reticle.plane != null && reticle.axis == null) {
             // Attached to the plane so the point follows it as ARCore refines the surface
@@ -1050,7 +1038,7 @@ class ARSurfaceView(
             }
         }
         if (heightTop) {
-            sessionManager.showHint("Top marked — now aim at the table right at the bottom and stamp")
+            sessionManager.showHint("Top marked — for an exact height, stamp the teal surface right below it")
         } else if (reticle.ambiguous) {
             sessionManager.showHint("Placed on an edge — depth is uncertain here. Undo and aim slightly inside if it looks off")
         }

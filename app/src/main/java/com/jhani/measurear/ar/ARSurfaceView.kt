@@ -878,9 +878,20 @@ class ARSurfaceView(
     }
 
     private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?, fromTap: Boolean = false) {
+        val pending = sessionManager.pendingStart
+        // Top of an object (bottle, box) as the start of a height: its depth is never used, only
+        // its line of sight, which is intersected with the vertical above a base on the surface
+        val heightTop = reticle != null && !reticle.onSurface && pending == null &&
+            reticle.snappedTo == null && reticle.axis == null && surfaceCount > 0
+        // A height from a top point must end on the surface right below it
+        if (pending != null && !pending.onSurface && reticle?.replaceStart == null) {
+            sessionManager.showHint("Now aim at the table right at the bottom of the object — the line snaps vertical")
+            post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+            return
+        }
         // Without a depth sensor, estimates can be off by tens of centimeters: only measure on
         // detected surfaces (or lines locked vertical from one)
-        if (reticle == null || !reticle.onSurface) {
+        if (!heightTop && (reticle == null || !reticle.onSurface)) {
             sessionManager.showHint(
                 when {
                     surfaceCount == 0 -> "No surface yet — sweep the phone slowly over a table, floor or wall"
@@ -896,6 +907,7 @@ class ARSurfaceView(
             }
             return
         }
+        reticle ?: return
 
         val point = if (reticle.plane != null && reticle.axis == null) {
             // Attached to the plane so the point follows it as ARCore refines the surface
@@ -957,10 +969,10 @@ class ARSurfaceView(
                 sessionManager.showHint("Shape closed — area measured")
             }
         }
-        if (reticle.ambiguous) {
+        if (heightTop) {
+            sessionManager.showHint("Top marked — now aim at the table right at the bottom and stamp")
+        } else if (reticle.ambiguous) {
             sessionManager.showHint("Placed on an edge — depth is uncertain here. Undo and aim slightly inside if it looks off")
-        } else if (!point.onSurface) {
-            sessionManager.showHint("Not on a detected flat surface — this point is an estimate")
         }
         post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
     }

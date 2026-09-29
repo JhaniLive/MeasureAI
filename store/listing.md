@@ -53,8 +53,8 @@ Tools
 ruler, tape measure, AR measure, room measure, height, area, distance, level
 
 ## Contact
-Email: CONTACT_EMAIL
-Privacy policy URL: https://jhanilive.github.io/MeasureAI/privacy-policy.html  (once GitHub Pages is on; see below)
+Email: reply2jhani@gmail.com
+Privacy policy URL: https://jhanilive.github.io/MeasureAI/privacy-policy.html
 
 ---
 

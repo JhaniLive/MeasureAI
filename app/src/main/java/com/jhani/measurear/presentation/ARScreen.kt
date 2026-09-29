@@ -140,6 +140,10 @@ fun ARScreen(
     var fitSpec by remember { mutableStateOf(com.jhani.measurear.measurement.BoxSpec.PRESETS[0]) }
     LaunchedEffect(fitSpec) { sessionManager.fitSpec = fitSpec }
     var showFitSize by remember { mutableStateOf(false) }
+    // Home tools for a finished area: materials calculator and floor plan
+    var materialsFor by remember { mutableStateOf<Float?>(null) }
+    var planBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var planArea by remember { mutableStateOf(0f) }
     LaunchedEffect(mode) { if (mode == MeasureMode.FIT) showFitSize = true }
     // Calibration factor for this session, and a finished calibration measurement to confirm
     var scale by rememberSaveable { mutableStateOf(1f) }
@@ -440,6 +444,15 @@ fun ARScreen(
                 }
 
                 MeasureControls(
+                    onMaterials = { area -> materialsFor = area },
+                    onPlan = { r ->
+                        val outline = r.outline
+                        val area = r.area
+                        if (outline != null && area != null && outline.size >= 3) {
+                            planArea = area
+                            planBitmap = FloorPlanRenderer.render(outline, r.outlineNormal, unit, "${r.mode.title} plan", area)
+                        }
+                    },
                     fitSpec = fitSpec,
                     onFitSize = { showFitSize = true },
                     onRotateBox = { sessionManager.requestAction(MeasureAction.RotateBox(it)) },
@@ -502,6 +515,23 @@ fun ARScreen(
                     exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))
                 ) {
                     BrandedLoader(status = "Starting the camera")
+                }
+
+                materialsFor?.let { area ->
+                    MaterialsDialog(area = area, unit = unit, onDismiss = { materialsFor = null })
+                }
+                planBitmap?.let { bmp ->
+                    fun save(then: (HistoryRecord) -> Unit) = scope.launch {
+                        val summary = com.jhani.measurear.measurement.MeasurementSummary(planArea, isArea = true, isEstimate = false, label = "Floor plan")
+                        val record = HistoryStore.add(context, "Floor plan · ${formatArea(planArea, false, unit)}", listOf(summary), bmp)
+                        then(record)
+                    }
+                    FloorPlanDialog(
+                        plan = bmp,
+                        onSave = { save { hint = "Floor plan saved to History"; planBitmap = null } },
+                        onShare = { save { HistoryStore.share(context, it, unit); planBitmap = null } },
+                        onDismiss = { planBitmap = null }
+                    )
                 }
 
                 if (showFitSize) {
@@ -787,6 +817,8 @@ private fun UnitToggle(unit: MeasureUnit, onUnitChange: (MeasureUnit) -> Unit, m
  */
 @Composable
 private fun MeasureControls(
+    onMaterials: (Float) -> Unit,
+    onPlan: (ShapeResultUi) -> Unit,
     fitSpec: com.jhani.measurear.measurement.BoxSpec,
     onFitSize: () -> Unit,
     onRotateBox: (Float) -> Unit,
@@ -844,6 +876,12 @@ private fun MeasureControls(
                 Spacer(modifier = Modifier.height(8.dp))
             }
             ResultCard(result = result, mode = mode, draftCount = draftCount, unit = unit)
+            // Finished area: what to buy, and a floor plan
+            val area = result?.area
+            if (result != null && !result.isLive && area != null && draftCount == 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AreaActions(onMaterials = { onMaterials(area) }, onPlan = { onPlan(result) })
+            }
             // Open-ended shapes (Path, Area) finish with Done
             if (mode.points == null && draftCount >= mode.minPoints) {
                 Spacer(modifier = Modifier.height(8.dp))

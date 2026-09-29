@@ -1521,7 +1521,13 @@ class ARSurfaceView(
             r.values.firstOrNull()?.let { summaries.add(it.toSummary(shape.isEstimate)) }
             if (shape.points.any { it.anchor.trackingState != TrackingState.TRACKING }) continue
             draw(r, shape.isEstimate, live = false, mode = shape.mode)
-            if (shape.mode == sessionManager.mode) result = ShapeResultUi(shape.mode, r.values, shape.isEstimate, isLive = false)
+            if (shape.mode == sessionManager.mode) {
+                result = ShapeResultUi(
+                    shape.mode, r.values, shape.isEstimate, isLive = false,
+                    outline = r.fill?.map { it * sessionManager.scale },
+                    outlineNormal = shape.normal
+                )
+            }
         }
 
         // Live preview: the draft plus where the next point would go

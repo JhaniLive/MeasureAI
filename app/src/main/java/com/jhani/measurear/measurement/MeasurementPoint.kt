@@ -213,8 +213,14 @@ data class ShapeResultUi(
     val mode: MeasureMode,
     val values: List<ResultValue>,
     val isEstimate: Boolean,
-    val isLive: Boolean
-)
+    val isLive: Boolean,
+    /** Finished outlines (real size, meters) and their surface, for the floor plan. */
+    val outline: List<Vec3>? = null,
+    val outlineNormal: Vec3? = null
+) {
+    /** The area value, if this result has one (Area, Rectangle, Circle). */
+    val area: Float? get() = values.firstOrNull { it.kind == ValueKind.AREA }?.value
+}
 
 /**
  * Straight-line (Euclidean) distance in meters between two ARCore poses.

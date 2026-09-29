@@ -241,6 +241,18 @@ fun ModeIllustration(mode: MeasureMode, modifier: Modifier = Modifier, compact: 
                 line(p(0.4f, 0.15f), p(0.6f, 0.15f))
                 dots(0.5f to 0.85f, 0.5f to 0.15f)
             }
+            MeasureMode.HANG -> {
+                // Three frames hung level, with nail marks and a level guide
+                line(p(0.06f, 0.2f), p(0.94f, 0.2f), dashed = true, color = HudTeal.copy(alpha = 0.6f))
+                listOf(0.1f, 0.4f, 0.7f).forEach { x ->
+                    drawRect(HudTeal.copy(alpha = 0.22f), p(x, 0.32f), Size(w * 0.2f, h * 0.44f))
+                    drawRect(HudTeal, p(x, 0.32f), Size(w * 0.2f, h * 0.44f), style = Stroke(stroke))
+                    val n = p(x + 0.1f, 0.2f)
+                    val s = w * 0.03f
+                    drawLine(Color.White, Offset(n.x - s, n.y - s), Offset(n.x + s, n.y + s), stroke)
+                    drawLine(Color.White, Offset(n.x - s, n.y + s), Offset(n.x + s, n.y - s), stroke)
+                }
+            }
             MeasureMode.FIT -> {
                 // A sofa-sized box standing on the floor, with a check mark
                 line(p(0.05f, 0.86f), p(0.95f, 0.86f), color = floor)
@@ -678,6 +690,109 @@ fun FitSizeDialog(
         dismissButton = {
             Text(
                 "Close",
+                modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
+                color = Color.White.copy(alpha = 0.7f)
+            )
+        }
+    )
+}
+
+/** Hang pictures: the arrangement summary; tap to change it. */
+@Composable
+fun HangControls(spec: com.jhani.measurear.measurement.HangSpec, unit: MeasureUnit, onEdit: () -> Unit) {
+    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
+    Text(
+        "${spec.count} frame${if (spec.count > 1) "s" else ""} · ${fmt(spec.width)} × ${fmt(spec.height)} · gap ${fmt(spec.gap)}  ▾",
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, HudTeal, RoundedCornerShape(16.dp))
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        color = Color.White,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1
+    )
+}
+
+/** Number of frames, their size, the gap and the hook drop (in the current unit). */
+@Composable
+fun HangDialog(
+    current: com.jhani.measurear.measurement.HangSpec,
+    unit: MeasureUnit,
+    onApply: (com.jhani.measurear.measurement.HangSpec) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val toUnit = if (unit == MeasureUnit.METRIC) 100f else 39.37008f
+    val unitLabel = if (unit == MeasureUnit.METRIC) "cm" else "in"
+    fun show(m: Float) = if (unit == MeasureUnit.METRIC) "%.0f".format(m * toUnit) else "%.1f".format(m * toUnit)
+    var count by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(current.count) }
+    val fields = listOf("Frame width", "Frame height", "Gap between", "Hook below top")
+    val values = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateListOf(show(current.width), show(current.height), show(current.gap), show(current.hookDrop))
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF0E1614),
+        title = { Text("Hang pictures", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Frames", color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text("−", color = HudTeal, fontSize = 24.sp, modifier = Modifier.clickable { count = (count - 1).coerceAtLeast(1) }.padding(horizontal = 14.dp))
+                    Text("$count", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text("+", color = HudTeal, fontSize = 24.sp, modifier = Modifier.clickable { count = (count + 1).coerceAtMost(8) }.padding(horizontal = 14.dp))
+                }
+                fields.chunked(2).forEachIndexed { row, pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEachIndexed { col, label ->
+                            val i = row * 2 + col
+                            androidx.compose.material3.OutlinedTextField(
+                                value = values[i],
+                                onValueChange = { values[i] = it.filter { c -> c.isDigit() || c == '.' }.take(6) },
+                                label = { Text("$label ($unitLabel)", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                                ),
+                                modifier = Modifier.weight(1f),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = HudTeal,
+                                    focusedLabelColor = HudTeal
+                                )
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Hook below top: how far the hook or taut wire sits below the frame's top edge.",
+                    color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp
+                )
+            }
+        },
+        confirmButton = {
+            val m = values.map { it.toFloatOrNull()?.div(toUnit) }
+            val valid = m.all { it != null } && m[0]!! > 0.01f && m[1]!! > 0.01f && m[2]!! >= 0f && m[3]!! >= 0f && m[3]!! < m[1]!!
+            Text(
+                "Apply",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (valid) HudTeal else HudTeal.copy(alpha = 0.3f))
+                    .clickable(enabled = valid) {
+                        onApply(com.jhani.measurear.measurement.HangSpec(count, m[0]!!, m[1]!!, m[2]!!, m[3]!!))
+                    }
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                color = Color.Black,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        dismissButton = {
+            Text(
+                "Cancel",
                 modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
                 color = Color.White.copy(alpha = 0.7f)
             )

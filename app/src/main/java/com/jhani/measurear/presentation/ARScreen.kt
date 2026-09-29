@@ -140,6 +140,11 @@ fun ARScreen(
     var fitSpec by remember { mutableStateOf(com.jhani.measurear.measurement.BoxSpec.PRESETS[0]) }
     LaunchedEffect(fitSpec) { sessionManager.fitSpec = fitSpec }
     var showFitSize by remember { mutableStateOf(false) }
+    // Hang pictures: arrangement and its editor
+    var hangSpec by remember { mutableStateOf(com.jhani.measurear.measurement.HangSpec()) }
+    LaunchedEffect(hangSpec) { sessionManager.hangSpec = hangSpec }
+    var showHang by remember { mutableStateOf(false) }
+    LaunchedEffect(mode) { if (mode == MeasureMode.HANG) showHang = true }
     // Home tools for a finished area: materials calculator and floor plan
     var materialsFor by remember { mutableStateOf<Float?>(null) }
     var planBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -444,6 +449,8 @@ fun ARScreen(
                 }
 
                 MeasureControls(
+                    hangSpec = hangSpec,
+                    onEditHang = { showHang = true },
                     onMaterials = { area -> materialsFor = area },
                     onPlan = { r ->
                         val outline = r.outline
@@ -531,6 +538,21 @@ fun ARScreen(
                         onSave = { save { hint = "Floor plan saved to History"; planBitmap = null } },
                         onShare = { save { HistoryStore.share(context, it, unit); planBitmap = null } },
                         onDismiss = { planBitmap = null }
+                    )
+                }
+
+                if (showHang) {
+                    HangDialog(
+                        current = hangSpec,
+                        unit = unit,
+                        onApply = {
+                            hangSpec = it
+                            showHang = false
+                            sessionManager.hangSpec = it
+                            sessionManager.requestAction(MeasureAction.UpdateHang)
+                            hint = "Tap a detected wall where the middle of the frames should be"
+                        },
+                        onDismiss = { showHang = false }
                     )
                 }
 
@@ -817,6 +839,8 @@ private fun UnitToggle(unit: MeasureUnit, onUnitChange: (MeasureUnit) -> Unit, m
  */
 @Composable
 private fun MeasureControls(
+    hangSpec: com.jhani.measurear.measurement.HangSpec,
+    onEditHang: () -> Unit,
     onMaterials: (Float) -> Unit,
     onPlan: (ShapeResultUi) -> Unit,
     fitSpec: com.jhani.measurear.measurement.BoxSpec,
@@ -869,6 +893,10 @@ private fun MeasureControls(
         } else {
             if (mode == MeasureMode.FAR) {
                 GroundChip(groundDetected, phoneHeight, unit, onPhoneHeightClick)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (mode == MeasureMode.HANG) {
+                HangControls(hangSpec, unit, onEdit = onEditHang)
                 Spacer(modifier = Modifier.height(8.dp))
             }
             if (mode == MeasureMode.FIT) {

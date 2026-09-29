@@ -55,6 +55,9 @@ sealed interface MeasureAction {
     /** Will it fit?: give the last placed box the current [ARSessionManager.fitSpec]. */
     data object ResizeBox : MeasureAction
 
+    /** Hang pictures: give the last arrangement the current [ARSessionManager.hangSpec]. */
+    data object UpdateHang : MeasureAction
+
     /** Finger drag of a placed point, in view pixels. */
     data class DragStart(val x: Float, val y: Float) : MeasureAction
     data class DragMove(val x: Float, val y: Float) : MeasureAction
@@ -148,6 +151,10 @@ class ARSessionManager(private val context: Context) {
     fun emitCalibration(sample: CalibrationSample) {
         _calibration.tryEmit(sample)
     }
+
+    /** Hang pictures: the arrangement to place. UI writes, GL reads. */
+    @Volatile
+    var hangSpec: com.jhani.measurear.measurement.HangSpec = com.jhani.measurear.measurement.HangSpec()
 
     /** Will it fit?: size of the next box to place. UI writes, GL reads. */
     @Volatile

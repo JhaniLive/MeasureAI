@@ -25,6 +25,7 @@ enum class MeasureMode(
     CIRCLE("Circle", "Tap the center, then a point on the edge", 2),
     AREA("Area", "Tap each corner, then back on the first to close", null, minPoints = 3),
     VOLUME("Volume", "Tap three corners of the base, then tilt up to the top", 4),
+    HANG("Hang pictures", "Tap the wall where the middle of your frames should be", 1),
     FIT("Will it fit?", "Pick a size, then tap the floor to place a life-size box — drag to move it", 1),
     CALIBRATE("Calibrate", "Lay a bank card flat on the teal dots, then tap both ends of its long edge", 2, inPicker = false)
 }
@@ -72,7 +73,9 @@ object ShapeMath {
         phoneHeightError: Float = 0.02f,
         /** Will it fit?: box size and rotation. */
         box: BoxSpec? = null,
-        yawDegrees: Float = 0f
+        yawDegrees: Float = 0f,
+        /** Hang pictures: the arrangement. */
+        hang: HangSpec? = null
     ): ShapeResult {
         // Boxes stand on the floor; everything else lies on its surface or its points' plane
         val normal = when {
@@ -199,6 +202,22 @@ object ShapeMath {
                 )
             }
 
+            MeasureMode.HANG -> {
+                val c = pts.firstOrNull() ?: return empty
+                val spec = hang ?: return empty
+                val layout = hangLayout(c, surfaceNormal ?: Vec3(0f, 0f, 1f), spec)
+                val paths = layout.frames.map { it + it.first() } + layout.nails.flatMap { nailCross(it, layout.across) }
+                val labels = layout.nails.zipWithNext { a, b -> SceneLabel((a + b) * 0.5f, len("Nail spacing", a.distanceTo(b))) }
+                ShapeResult(
+                    paths, null, labels,
+                    listOf(
+                        len("Nail spacing", spec.width + spec.gap),
+                        len("Total width", spec.totalWidth),
+                        len("Nail below frame top", spec.hookDrop)
+                    )
+                )
+            }
+
             MeasureMode.FIT -> {
                 val c = pts.firstOrNull() ?: return empty
                 val spec = box ?: return empty
@@ -257,6 +276,38 @@ object ShapeMath {
         return bottom + bottom.map { it + Vec3.UP * box.height }
     }
 
+    /** Frames (4 corners each) and nail points for a picture arrangement, plus the level axis. */
+    data class HangLayout(val frames: List<List<Vec3>>, val nails: List<Vec3>, val across: Vec3)
+
+    /**
+     * Lays out [spec] level on a wall with [wallNormal], centered at [center]: frames side by
+     * side, [HangSpec.gap] apart; each nail sits [HangSpec.hookDrop] below its frame's top center.
+     */
+    fun hangLayout(center: Vec3, wallNormal: Vec3, spec: HangSpec): HangLayout {
+        // Level direction along the wall (perpendicular to both its normal and up)
+        val across = (Vec3.UP cross wallNormal).normalized().let { if (it.length < 0.5f) Vec3(1f, 0f, 0f) else it }
+        val up = Vec3.UP
+        val frames = ArrayList<List<Vec3>>()
+        val nails = ArrayList<Vec3>()
+        for (i in 0 until spec.count) {
+            val x = -spec.totalWidth / 2f + spec.width / 2f + i * (spec.width + spec.gap)
+            val mid = center + across * x
+            val hw = across * (spec.width / 2f)
+            val hh = up * (spec.height / 2f)
+            frames.add(listOf(mid - hw - hh, mid + hw - hh, mid + hw + hh, mid - hw + hh))
+            nails.add(mid + up * (spec.height / 2f - spec.hookDrop))
+        }
+        return HangLayout(frames, nails, across)
+    }
+
+    /** A small ✕ at a nail point, in the wall plane. */
+    private fun nailCross(p: Vec3, across: Vec3): List<List<Vec3>> {
+        val s = 0.025f
+        val a = (across + Vec3.UP) * s
+        val b = (across - Vec3.UP) * s
+        return listOf(listOf(p - a, p + a), listOf(p - b, p + b))
+    }
+
     /** Points around a circle of [radius] at [center] in the plane with [normal]. */
     fun circle(center: Vec3, radius: Float, normal: Vec3): List<Vec3> {
         val (u, v) = Geometry.planeBasis(normal)
@@ -278,7 +329,9 @@ class MeasuredShape(
     val normal: Vec3?,
     /** Will it fit?: the virtual box's real size, and its rotation about the vertical. */
     var box: BoxSpec? = null,
-    var yawDegrees: Float = 0f
+    var yawDegrees: Float = 0f,
+    /** Hang pictures: the frame arrangement. */
+    var hang: HangSpec? = null
 ) {
     val isEstimate: Boolean get() = points.any { !it.onSurface }
 }
@@ -298,4 +351,16 @@ data class BoxSpec(val width: Float, val depth: Float, val height: Float, val na
             BoxSpec(1.00f, 0.60f, 2.00f, "Wardrobe")
         )
     }
+}
+
+/** Picture frames to hang side by side (meters). */
+data class HangSpec(
+    val count: Int = 3,
+    val width: Float = 0.40f,
+    val height: Float = 0.50f,
+    val gap: Float = 0.08f,
+    /** How far below the frame's top edge its hook/wire sits when pulled taut. */
+    val hookDrop: Float = 0.05f
+) {
+    val totalWidth: Float get() = count * width + (count - 1) * gap
 }

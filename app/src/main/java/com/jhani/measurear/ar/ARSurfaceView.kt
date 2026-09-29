@@ -893,6 +893,8 @@ class ARSurfaceView(
                     ?.let { it.yawDegrees = (it.yawDegrees + action.degrees) % 360f }
                 MeasureAction.ResizeBox -> sessionManager.shapes.lastOrNull { it.mode == MeasureMode.FIT }
                     ?.let { it.box = sessionManager.fitSpec }
+                MeasureAction.UpdateHang -> sessionManager.shapes.lastOrNull { it.mode == MeasureMode.HANG }
+                    ?.let { it.hang = sessionManager.hangSpec }
                 is MeasureAction.DragStart -> startDrag(action.x, action.y)
                 is MeasureAction.DragMove -> dragTo = floatArrayOf(action.x, action.y)
                 MeasureAction.DragEnd -> endDrag()
@@ -1303,6 +1305,13 @@ class ARSurfaceView(
             }
         }
 
+        if (mode == MeasureMode.HANG &&
+            (target?.plane == null || target.plane.type != Plane.Type.VERTICAL)
+        ) {
+            sessionManager.showHint("Aim at a detected wall (teal dots on the wall) to place the frames")
+            post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+            return
+        }
         if (mode == MeasureMode.FIT && target?.onSurface != true) {
             sessionManager.showHint("Aim at the teal floor to place the box")
             post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
@@ -1409,7 +1418,9 @@ class ARSurfaceView(
             sessionManager.discardDraft()
             return
         }
-        val shape = if (mode == MeasureMode.FIT) {
+        val shape = if (mode == MeasureMode.HANG) {
+            MeasuredShape(mode, draft.toList(), sessionManager.draftNormal, hang = sessionManager.hangSpec)
+        } else if (mode == MeasureMode.FIT) {
             MeasuredShape(
                 mode, draft.toList(), Vec3.UP,
                 box = sessionManager.fitSpec,
@@ -1421,6 +1432,11 @@ class ARSurfaceView(
         sessionManager.shapes.add(shape)
         draft.clear()
         sessionManager.draftMode = null
+        if (mode == MeasureMode.HANG) {
+            sessionManager.showHint("Mark each ✕ on the wall — drag the middle dot to move them")
+            post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+            return
+        }
         if (mode == MeasureMode.FIT) {
             // A placed box isn't a measurement: no History entry
             sessionManager.showHint("Drag the box's center dot to move it; rotate with ⟲ ⟳")
@@ -1449,23 +1465,33 @@ class ARSurfaceView(
         camera: Vec3? = null,
         estimate: Boolean = false,
         box: BoxSpec? = null,
-        yaw: Float = 0f
+        yaw: Float = 0f,
+        hang: com.jhani.measurear.measurement.HangSpec? = null
     ): ShapeResult? {
-        fun compute(p: List<Vec3>, c: Vec3?, b: BoxSpec?): ShapeResult? = when (mode) {
+        fun compute(
+            p: List<Vec3>,
+            c: Vec3?,
+            b: BoxSpec?,
+            h: com.jhani.measurear.measurement.HangSpec? = hang
+        ): ShapeResult? = when (mode) {
             // A typed-in phone height is known to ~15 cm; a detected ground to ~2 cm
             MeasureMode.FAR -> ShapeMath.compute(mode, p, normal, c, phoneHeightError = if (estimate) 0.15f else 0.02f)
             MeasureMode.DISTANCE -> {
                 val cam = p.getOrNull(1) ?: c
                 if (cam == null) null else ShapeMath.compute(mode, p.take(1), normal, cam)
             }
-            else -> ShapeMath.compute(mode, p, normal, box = b, yawDegrees = yaw)
+            else -> ShapeMath.compute(mode, p, normal, box = b, yawDegrees = yaw, hang = h)
         }
         // Calibration: values come from the scaled points (lengths × k, areas × k², volumes
         // × k³) but the outline is drawn where the points really are. A box has a real size,
         // so in world units it is size / k. Calibrate itself is always raw.
         val k = if (mode == MeasureMode.CALIBRATE) 1f else sessionManager.scale
         if (k == 1f) return compute(pts, camera, box)
-        val world = compute(pts, camera, box?.let { BoxSpec(it.width / k, it.depth / k, it.height / k, it.name) }) ?: return null
+        val world = compute(
+            pts, camera,
+            box?.let { BoxSpec(it.width / k, it.depth / k, it.height / k, it.name) },
+            hang?.let { it.copy(width = it.width / k, height = it.height / k, gap = it.gap / k, hookDrop = it.hookDrop / k) }
+        ) ?: return null
         val scaled = compute(pts.map { it * k }, camera?.let { it * k }, box) ?: return null
         return ShapeResult(
             world.paths, world.fill,
@@ -1516,7 +1542,7 @@ class ARSurfaceView(
         for (shape in sessionManager.shapes) {
             val r = shapeResult(
                 shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal,
-                estimate = shape.isEstimate, box = shape.box, yaw = shape.yawDegrees
+                estimate = shape.isEstimate, box = shape.box, yaw = shape.yawDegrees, hang = shape.hang
             ) ?: continue
             r.values.firstOrNull()?.let { summaries.add(it.toSummary(shape.isEstimate)) }
             if (shape.points.any { it.anchor.trackingState != TrackingState.TRACKING }) continue
@@ -1540,6 +1566,10 @@ class ARSurfaceView(
             val normal = if (draft.isEmpty()) reticle?.plane?.normal() else sessionManager.draftNormal
             val r = if (mode == MeasureMode.DISTANCE) {
                 shapeResult(mode, listOfNotNull(next?.first), normal, cameraPose.toVec())
+            } else if (mode == MeasureMode.HANG) {
+                reticle?.plane?.takeIf { it.type == Plane.Type.VERTICAL }?.let { plane ->
+                    next?.let { shapeResult(mode, listOf(it.first), plane.normal(), hang = sessionManager.hangSpec) }
+                }
             } else if (mode == MeasureMode.FIT) {
                 // Ghost box where it would go (only on a detected surface)
                 next?.takeIf { it.second }?.let {
@@ -1552,7 +1582,9 @@ class ARSurfaceView(
             } else {
                 shapeResult(mode, placed.map { it.anchor.pose.toVec() } + listOfNotNull(next?.first), normal)
             }
-            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR || mode == MeasureMode.FIT)) {
+            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR ||
+                    mode == MeasureMode.FIT || mode == MeasureMode.HANG)
+            ) {
                 draw(r, estimate, live = true, mode = mode)
             }
             // While a shape is being placed, the card shows only that shape (never the last one)

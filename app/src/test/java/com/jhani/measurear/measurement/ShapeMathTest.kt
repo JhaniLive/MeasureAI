@@ -106,6 +106,25 @@ class ShapeMathTest {
         assertEquals(0f, c[0].y, 1e-6f)
     }
 
+    @Test fun hangThreeFramesLevelAndEvenlySpaced() {
+        // Wall facing +z; 3 frames 40×50 cm, 8 cm apart, hooks 5 cm below the top
+        val spec = HangSpec(3, 0.4f, 0.5f, 0.08f, 0.05f)
+        val center = v(0f, 1.5f, -2f)
+        val layout = ShapeMath.hangLayout(center, v(0f, 0f, 1f), spec)
+        assertEquals(3, layout.nails.size)
+        // Level: all nails at the same height, 20 cm above center (25 − 5)
+        layout.nails.forEach { assertEquals(1.7f, it.y, 1e-4f) }
+        // Evenly spaced: frame width + gap
+        assertEquals(0.48f, layout.nails[0].distanceTo(layout.nails[1]), 1e-4f)
+        assertEquals(0.48f, layout.nails[1].distanceTo(layout.nails[2]), 1e-4f)
+        // Centered, and everything on the wall plane
+        assertEquals(center.x, layout.nails[1].x, 1e-4f)
+        layout.frames.flatten().forEach { assertEquals(-2f, it.z, 1e-4f) }
+        assertEquals(1.36f, spec.totalWidth, 1e-4f)
+        val r = ShapeMath.compute(MeasureMode.HANG, listOf(center), v(0f, 0f, 1f), hang = spec)
+        assertEquals(0.48f, r.value("Nail spacing"), 1e-4f)
+    }
+
     @Test fun volumeBox() {
         val pts = listOf(v(0f, 0f, 0f), v(0.5f, 0f, 0f), v(0.5f, 0f, 0.4f), v(0.5f, 0.3f, 0f))
         val r = ShapeMath.compute(MeasureMode.VOLUME, pts)
@@ -116,7 +135,7 @@ class ShapeMathTest {
     }
 
     @Test fun draftsWithTooFewPointsAreEmpty() {
-        for (mode in MeasureMode.values().filter { it != MeasureMode.FIT }) {
+        for (mode in MeasureMode.values().filter { it != MeasureMode.FIT && it != MeasureMode.HANG }) {
             val r = ShapeMath.compute(mode, emptyList(), camera = v(0f, 0f, 0f))
             assertTrue(mode.name, r.values.isEmpty())
         }

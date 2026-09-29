@@ -127,8 +127,8 @@ class ARSurfaceView(
         // Loose on purpose: depth on plain tables is noisy; this only has to tell the table
         // from the floor ~70 cm below it. The position itself comes from the plane.
         private const val EXTEND_MAX = 0.6f
-        private const val EXTEND_TOLERANCE = 0.10f
-        private const val EXTEND_RATIO = 0.20f
+        private const val EXTEND_TOLERANCE = 0.05f
+        private const val EXTEND_RATIO = 0.08f
 
         // Vertical snap window when the aim isn't on a surface (top of a bottle, box…)
         private const val VERTICAL_SNAP_WIDE_DP = 70f

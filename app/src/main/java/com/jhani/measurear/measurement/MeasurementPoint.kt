@@ -62,7 +62,10 @@ data class MeasurementSummary(
     val isEstimate: Boolean,
     /** Lines only: flat distance (ignoring height) and height difference, in meters. */
     val horizontal: Float = 0f,
-    val vertical: Float = 0f
+    val vertical: Float = 0f,
+    /** What [value] measures, and its name ("Area", "Volume"...) for shape modes. */
+    val kind: ValueKind = if (isArea) ValueKind.AREA else ValueKind.LENGTH,
+    val label: String? = null
 ) {
     /** Lines only: angle from level, in degrees. */
     val angleDegrees: Float
@@ -127,7 +130,9 @@ data class ScreenSegment(
     val startVisible: Boolean,
     val endVisible: Boolean,
     /** Index into the completed lines, or -1 for the live segment / guides. */
-    val lineIndex: Int = -1
+    val lineIndex: Int = -1,
+    /** Draw the length pill on this segment (off for shape outlines; they use scene labels). */
+    val labelled: Boolean = true
 )
 
 /**
@@ -168,7 +173,30 @@ data class MeasureUiState(
     val segments: List<ScreenSegment> = emptyList(),
     val areas: List<ScreenArea> = emptyList(),
     /** Every completed line and area, including off-screen ones (for sharing / history). */
-    val summaries: List<MeasurementSummary> = emptyList()
+    val summaries: List<MeasurementSummary> = emptyList(),
+    /** Selected mode, and how many points of its current shape are placed. */
+    val mode: MeasureMode = MeasureMode.LINE,
+    val draftCount: Int = 0,
+    /** Filled outlines of shapes (rectangles, areas, circles, box bases). */
+    val fills: List<ScreenPolygon> = emptyList(),
+    /** Value pills in the scene (edge lengths, angle at its corner, radius…). */
+    val sceneLabels: List<ScreenValueLabel> = emptyList(),
+    /** Result of the shape being placed (live) or the last finished one, for the result card. */
+    val result: ShapeResultUi? = null
+)
+
+/** A shape outline projected to view pixels. */
+data class ScreenPolygon(val xs: List<Float>, val ys: List<Float>, val isEstimate: Boolean)
+
+/** A value pill at view pixel ([x], [y]). */
+data class ScreenValueLabel(val x: Float, val y: Float, val value: ResultValue, val isEstimate: Boolean)
+
+/** Result card content: values (primary first); [isLive] while the shape is being placed. */
+data class ShapeResultUi(
+    val mode: MeasureMode,
+    val values: List<ResultValue>,
+    val isEstimate: Boolean,
+    val isLive: Boolean
 )
 
 /**
@@ -190,7 +218,7 @@ enum class MeasureUnit { METRIC, IMPERIAL }
  * Measurement length: centimeters ("28.5 cm") or inches / feet-inches ("11.2 in", "3' 4.5\"").
  */
 fun formatLength(meters: Float, unit: MeasureUnit): String = when (unit) {
-    MeasureUnit.METRIC -> "%.1f cm".format(meters * 100f)
+    MeasureUnit.METRIC -> if (meters >= 1f) "%.2f m".format(meters) else "%.1f cm".format(meters * 100f)
     MeasureUnit.IMPERIAL -> {
         val totalInches = meters * 39.3701f
         if (totalInches < 12f) {
@@ -204,10 +232,10 @@ fun formatLength(meters: Float, unit: MeasureUnit): String = when (unit) {
 
 /**
  * Measurement length. Estimates (off a detected surface) get "≈" and their typical error:
- * about ±15% on this class of phone without a depth sensor.
+ * about ±25% on this class of phone without a depth sensor (measured: +11%, −23%).
  */
 fun formatDistance(meters: Float, isEstimate: Boolean, unit: MeasureUnit): String =
-    if (isEstimate) "≈ " + formatLength(meters, unit) + " ±15%" else formatLength(meters, unit)
+    if (isEstimate) "≈ " + formatLength(meters, unit) + " ±25%" else formatLength(meters, unit)
 
 /**
  * Area: cm² / m² or in² / ft², with "≈" for estimates.
@@ -229,8 +257,8 @@ fun formatArea(squareMeters: Float, isEstimate: Boolean, unit: MeasureUnit): Str
  */
 fun formatSummaries(summaries: List<MeasurementSummary>, unit: MeasureUnit): String =
     summaries.mapIndexed { i, s ->
-        val text = if (s.isArea) formatArea(s.value, s.isEstimate, unit) else formatDistance(s.value, s.isEstimate, unit)
-        "${i + 1}. ${if (s.isArea) "Area" else "Length"}: $text"
+        val text = formatValue(ResultValue(s.label ?: "", s.value, s.kind), s.isEstimate, unit)
+        "${i + 1}. ${s.label ?: if (s.isArea) "Area" else "Length"}: $text"
     }.joinToString("\n")
 
 /**
@@ -239,4 +267,21 @@ fun formatSummaries(summaries: List<MeasurementSummary>, unit: MeasureUnit): Str
 fun formatRange(meters: Float, unit: MeasureUnit): String = when (unit) {
     MeasureUnit.METRIC -> "%.2f m".format(meters)
     MeasureUnit.IMPERIAL -> "%.1f ft".format(meters * 3.28084f)
+}
+
+/** Volume: liters below 1 m³ (or ft³ imperial), with "≈" for estimates. */
+fun formatVolume(cubicMeters: Float, isEstimate: Boolean, unit: MeasureUnit): String {
+    val value = when (unit) {
+        MeasureUnit.METRIC -> if (cubicMeters < 1f) "%.1f L".format(cubicMeters * 1000f) else "%.2f m³".format(cubicMeters)
+        MeasureUnit.IMPERIAL -> "%.2f ft³".format(cubicMeters * 35.3147f)
+    }
+    return (if (isEstimate) "≈ " else "") + value
+}
+
+/** Any result value, formatted for its kind. */
+fun formatValue(value: ResultValue, isEstimate: Boolean, unit: MeasureUnit): String = when (value.kind) {
+    ValueKind.LENGTH -> formatDistance(value.value, isEstimate, unit)
+    ValueKind.AREA -> formatArea(value.value, isEstimate, unit)
+    ValueKind.VOLUME -> formatVolume(value.value, isEstimate, unit)
+    ValueKind.ANGLE -> (if (isEstimate) "≈ " else "") + "%.1f°".format(value.value)
 }

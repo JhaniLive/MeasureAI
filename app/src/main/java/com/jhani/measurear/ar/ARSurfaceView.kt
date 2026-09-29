@@ -33,6 +33,17 @@ import com.jhani.measurear.measurement.StraightenMode
 import com.jhani.measurear.measurement.distanceBetween
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import com.jhani.measurear.measurement.Geometry
+import com.jhani.measurear.measurement.MeasureMode
+import com.jhani.measurear.measurement.MeasuredShape
+import com.jhani.measurear.measurement.ResultValue
+import com.jhani.measurear.measurement.ScreenPolygon
+import com.jhani.measurear.measurement.ScreenValueLabel
+import com.jhani.measurear.measurement.ShapeMath
+import com.jhani.measurear.measurement.ShapeResult
+import com.jhani.measurear.measurement.ShapeResultUi
+import com.jhani.measurear.measurement.ValueKind
+import com.jhani.measurear.measurement.Vec3
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -270,6 +281,7 @@ class ARSurfaceView(
             camera.getProjectionMatrix(projectionMatrix, 0, NEAR_PLANE, FAR_PLANE)
             camera.getViewMatrix(viewMatrix, 0)
 
+            syncMode()
             val reticle = applyAlignment(findReticleTarget(frame))
             val tReticle = System.nanoTime()
             if ((reticle?.state == ReticleState.SNAPPED && lastReticleState != ReticleState.SNAPPED) ||
@@ -820,12 +832,20 @@ class ARSurfaceView(
     private fun applyActions(session: Session, frame: Frame, reticle: ReticleTarget?) {
         while (true) {
             when (val action = sessionManager.pollAction() ?: return) {
-                is MeasureAction.AddPoint -> addPoint(session, frame, reticleAt(action.pressedAtNanos, reticle))
+                is MeasureAction.AddPoint ->
+                    if (sessionManager.mode == MeasureMode.LINE) {
+                        addPoint(session, frame, reticleAt(action.pressedAtNanos, reticle))
+                    } else {
+                        addShapePoint(session, frame, reticleAt(action.pressedAtNanos, reticle), fromTap = false)
+                    }
+                MeasureAction.FinishShape -> finishShape()
                 is MeasureAction.AddPointAt ->
                     if (reticle == null && frame.camera.trackingState != TrackingState.TRACKING) {
                         sessionManager.showHint("Hold on — still finding my bearings. Move the phone slowly")
                     } else {
-                        addPoint(session, frame, tapTarget(frame, action.x, action.y), fromTap = true)
+                        val target = tapTarget(frame, action.x, action.y)
+                        if (sessionManager.mode == MeasureMode.LINE) addPoint(session, frame, target, fromTap = true)
+                        else addShapePoint(session, frame, target, fromTap = true, tapX = action.x, tapY = action.y)
                     }
                 MeasureAction.Undo -> sessionManager.undo()
                 MeasureAction.Clear -> {
@@ -1046,6 +1066,214 @@ class ARSurfaceView(
     }
 
     // ---------------------------------------------------------------------------------------
+    // Shape modes (everything except Line)
+    // ---------------------------------------------------------------------------------------
+
+    private var syncedMode = MeasureMode.LINE
+
+    /** Drops a half-placed shape or line when the user switches modes. */
+    private fun syncMode() {
+        val mode = sessionManager.mode
+        if (mode == syncedMode) return
+        syncedMode = mode
+        sessionManager.discardDraft()
+        sessionManager.pendingStart?.let {
+            it.anchor.detach()
+            sessionManager.pendingStart = null
+            pointRays.remove(it.anchor)
+        }
+    }
+
+    private fun Pose.toVec() = Vec3(tx(), ty(), tz())
+    private fun Vec3.toPose() = Pose(floatArrayOf(x, y, z), floatArrayOf(0f, 0f, 0f, 1f))
+    private fun FloatArray.toVec() = Vec3(this[0], this[1], this[2])
+
+    private fun Plane.normal(): Vec3 {
+        val n = FloatArray(3)
+        centerPose.getTransformedAxis(1, 1f, n, 0)
+        return n.toVec()
+    }
+
+    /**
+     * Heights (Height's 2nd point, Volume's 4th) need no surface at the top: the point on the
+     * vertical through the base closest to the line of sight.
+     */
+    private fun isVerticalStep(mode: MeasureMode, index: Int) =
+        (mode == MeasureMode.HEIGHT && index == 1) || (mode == MeasureMode.VOLUME && index == 3)
+
+    /** Where the next point of the current shape would go, and whether it is reliable. */
+    private fun nextShapePoint(target: ReticleTarget?): Pair<Vec3, Boolean>? {
+        val mode = sessionManager.mode
+        val draft = sessionManager.draft
+        if (isVerticalStep(mode, draft.size)) {
+            val base = draft.getOrNull(if (mode == MeasureMode.VOLUME) 1 else 0) ?: return null
+            if (base.anchor.trackingState != TrackingState.TRACKING) return null
+            val ray = centerRay() ?: return null
+            val top = Geometry.verticalFromBase(base.anchor.pose.toVec(), ray[0].toVec(), ray[1].toVec()) ?: return null
+            return top to base.onSurface
+        }
+        target ?: return null
+        return target.pose.toVec() to target.onSurface
+    }
+
+    private fun addShapePoint(
+        session: Session,
+        frame: Frame,
+        target: ReticleTarget?,
+        fromTap: Boolean,
+        tapX: Float = 0f,
+        tapY: Float = 0f
+    ) {
+        val mode = sessionManager.mode
+        val draft = sessionManager.draft
+        Log.i(
+            "Stamp",
+            "shape $mode #${draft.size} ${if (fromTap) "tap" else "stamp"} target=${target?.state} " +
+                "onSurface=${target?.onSurface} surfaces=$surfaceCount"
+        )
+
+        // Area: landing back on the first corner closes the shape
+        if (mode == MeasureMode.AREA && draft.size >= 3) {
+            val first = projectToScreen(draft.first().anchor.pose)
+            val x = if (fromTap) tapX else viewportWidth / 2f
+            val y = if (fromTap) tapY else viewportHeight / 2f
+            if (first != null && hypot(first[0] - x, first[1] - y) <= SNAP_RADIUS_DP * density) {
+                finishShape()
+                return
+            }
+        }
+
+        val vertical = isVerticalStep(mode, draft.size)
+        val (point, onSurface) = nextShapePoint(if (vertical) null else target) ?: run {
+            sessionManager.showHint(
+                if (surfaceCount == 0) "Nothing to measure on yet — sweep the phone slowly over the floor or a wall"
+                else "Nothing under the crosshair — aim at a surface or object"
+            )
+            post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+            return
+        }
+
+        val plane = if (vertical) null else target?.plane
+        val anchor = plane?.createAnchor(point.toPose()) ?: session.createAnchor(point.toPose())
+        if (draft.isEmpty()) {
+            sessionManager.draftMode = mode
+            // The surface the shape lies on: the first point's plane, else level (floor/table)
+            sessionManager.draftNormal = plane?.normal() ?: Vec3.UP
+        }
+        draft.add(PlacedPoint(anchor, onSurface))
+        if (mode == MeasureMode.DISTANCE) {
+            // Keep where the user stood, so the distance stays fixed after they move
+            draft.add(PlacedPoint(session.createAnchor(frame.camera.pose), onSurface = true))
+        }
+        post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+
+        val needed = if (mode == MeasureMode.DISTANCE) 2 else mode.points
+        if (needed != null && draft.size >= needed) {
+            finishShape()
+        } else if (!onSurface) {
+            sessionManager.showHint("Approximate point (≈) — on the teal dots it's exact")
+        }
+    }
+
+    /** Turns the draft into a finished shape (Done, or the last point of a fixed-size mode). */
+    private fun finishShape() {
+        val mode = sessionManager.draftMode ?: return
+        val draft = sessionManager.draft
+        val min = if (mode == MeasureMode.DISTANCE) 2 else mode.minPoints
+        if (draft.size < min) {
+            sessionManager.showHint("${mode.title} needs at least $min points")
+            return
+        }
+        val shape = MeasuredShape(mode, draft.toList(), sessionManager.draftNormal)
+        sessionManager.shapes.add(shape)
+        draft.clear()
+        sessionManager.draftMode = null
+        shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal)
+            ?.values?.firstOrNull()
+            ?.let { sessionManager.emitCompleted(mode.title, it.toSummary(shape.isEstimate)) }
+        post {
+            performHapticFeedback(
+                if (android.os.Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
+                else HapticFeedbackConstants.VIRTUAL_KEY
+            )
+        }
+    }
+
+    private fun ResultValue.toSummary(isEstimate: Boolean) =
+        MeasurementSummary(value, isArea = kind == ValueKind.AREA, isEstimate = isEstimate, kind = kind, label = label)
+
+    /** Distance mode stores [point, camera]; every other mode is just its points. */
+    private fun shapeResult(mode: MeasureMode, pts: List<Vec3>, normal: Vec3, camera: Vec3? = null): ShapeResult? =
+        if (mode == MeasureMode.DISTANCE) {
+            val cam = pts.getOrNull(1) ?: camera
+            if (cam == null) null else ShapeMath.compute(mode, pts.take(1), normal, cam)
+        } else {
+            ShapeMath.compute(mode, pts, normal)
+        }
+
+    private class ShapeUi(
+        val fills: List<ScreenPolygon>,
+        val labels: List<ScreenValueLabel>,
+        val result: ShapeResultUi?,
+        val summaries: List<MeasurementSummary>
+    )
+
+    /** Projects every finished shape and the live draft; adds their outlines to [segments]. */
+    private fun publishShapes(reticle: ReticleTarget?, cameraPose: Pose, segments: MutableList<ScreenSegment>): ShapeUi {
+        val fills = ArrayList<ScreenPolygon>()
+        val labels = ArrayList<ScreenValueLabel>()
+        val summaries = ArrayList<MeasurementSummary>()
+        var result: ShapeResultUi? = null
+
+        fun draw(r: ShapeResult, estimate: Boolean, live: Boolean) {
+            for (path in r.paths) {
+                path.zipWithNext { a, b ->
+                    projectSegment(a.toPose(), b.toPose(), estimate, isLive = live)
+                        ?.copy(labelled = false)
+                        ?.let(segments::add)
+                }
+            }
+            r.fill?.let { poly ->
+                val screen = poly.map { projectToScreen(it.toPose()) }
+                if (screen.none { it == null }) {
+                    fills.add(ScreenPolygon(screen.map { it!![0] }, screen.map { it!![1] }, estimate))
+                }
+            }
+            for (label in r.labels) {
+                projectToScreen(label.at.toPose())?.let { labels.add(ScreenValueLabel(it[0], it[1], label.value, estimate)) }
+            }
+        }
+
+        for (shape in sessionManager.shapes) {
+            val r = shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal) ?: continue
+            r.values.firstOrNull()?.let { summaries.add(it.toSummary(shape.isEstimate)) }
+            if (shape.points.any { it.anchor.trackingState != TrackingState.TRACKING }) continue
+            draw(r, shape.isEstimate, live = false)
+            if (shape.mode == sessionManager.mode) result = ShapeResultUi(shape.mode, r.values, shape.isEstimate, isLive = false)
+        }
+
+        // Live preview: the draft plus where the next point would go
+        val mode = sessionManager.mode
+        if (mode != MeasureMode.LINE) {
+            val draft = sessionManager.draft
+            val placed = draft.filter { it.anchor.trackingState == TrackingState.TRACKING }
+            val next = nextShapePoint(reticle)
+            val estimate = placed.any { !it.onSurface } || next?.second == false
+            val normal = if (draft.isEmpty()) reticle?.plane?.normal() ?: Vec3.UP else sessionManager.draftNormal
+            val r = if (mode == MeasureMode.DISTANCE) {
+                shapeResult(mode, listOfNotNull(next?.first), normal, cameraPose.toVec())
+            } else {
+                shapeResult(mode, placed.map { it.anchor.pose.toVec() } + listOfNotNull(next?.first), normal)
+            }
+            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE)) {
+                draw(r, estimate, live = true)
+                if (r.values.isNotEmpty()) result = ShapeResultUi(mode, r.values, estimate, isLive = true)
+            }
+        }
+        return ShapeUi(fills, labels, result, summaries)
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Publishing
     // ---------------------------------------------------------------------------------------
 
@@ -1127,9 +1355,16 @@ class ARSurfaceView(
             null
         }
 
+        val shapeUi = publishShapes(reticle, cameraPose, segments)
+
         sessionManager.publishUiState(
             MeasureUiState(
                 isTracking = true,
+                mode = sessionManager.mode,
+                draftCount = sessionManager.draft.size,
+                fills = shapeUi.fills,
+                sceneLabels = shapeUi.labels,
+                result = shapeUi.result,
                 reticle = reticle?.state ?: ReticleState.SEARCHING,
                 hasPendingPoint = pending != null,
                 pendingX = pendingScreen?.get(0) ?: 0f,
@@ -1156,7 +1391,7 @@ class ARSurfaceView(
                 targetMeters = reticle?.let { distanceBetween(cameraPose, it.pose) },
                 segments = segments,
                 areas = areas,
-                summaries = summaries
+                summaries = summaries + shapeUi.summaries
             )
         )
     }

@@ -45,6 +45,9 @@ sealed interface MeasureAction {
 
     /** Place a point where the user tapped, at view pixel ([x], [y]). */
     data class AddPointAt(val x: Float, val y: Float) : MeasureAction
+
+    /** Finish an open-ended shape (Path, Area) with the points placed so far. */
+    data object FinishShape : MeasureAction
     data object Undo : MeasureAction
     data object Clear : MeasureAction
 
@@ -114,6 +117,18 @@ class ARSessionManager(private val context: Context) {
     /** Whether the pending start continues the current chain. GL thread only. */
     var pendingContinuesChain = false
 
+    /** Selected measuring mode. UI thread writes, GL reads. */
+    @Volatile
+    var mode: com.jhani.measurear.measurement.MeasureMode = com.jhani.measurear.measurement.MeasureMode.LINE
+
+    /** Finished shapes of every mode except Line (which uses [lines]). GL thread only. */
+    val shapes = mutableListOf<com.jhani.measurear.measurement.MeasuredShape>()
+
+    /** Points of the shape being placed, and the mode it was started in. GL thread only. */
+    val draft = mutableListOf<PlacedPoint>()
+    var draftMode: com.jhani.measurear.measurement.MeasureMode? = null
+    var draftNormal: com.jhani.measurear.measurement.Vec3 = com.jhani.measurear.measurement.Vec3.UP
+
     /** Whether the session has the Depth API on (grid occlusion). Set at session creation. */
     @Volatile
     var depthEnabled: Boolean = false
@@ -167,10 +182,15 @@ class ARSessionManager(private val context: Context) {
         _hints.tryEmit(message)
     }
 
-    /** Removes the pending point, or the most recent completed line. GL thread only. */
+    /** Removes the pending point, or the most recent completed line / shape. GL thread only. */
     fun undo() {
         val pending = pendingStart
-        if (pending != null) {
+        if (draft.isNotEmpty()) {
+            draft.removeAt(draft.lastIndex).anchor.detach()
+            if (draft.isEmpty()) draftMode = null
+        } else if (mode != com.jhani.measurear.measurement.MeasureMode.LINE && shapes.isNotEmpty()) {
+            shapes.removeAt(shapes.lastIndex).points.forEach { it.anchor.detach() }
+        } else if (pending != null) {
             pending.anchor.detach()
             pendingStart = null
             pendingContinuesChain = false
@@ -204,6 +224,16 @@ class ARSessionManager(private val context: Context) {
         lines.clear()
         areas.clear()
         chain.clear()
+        discardDraft()
+        shapes.forEach { shape -> shape.points.forEach { it.anchor.detach() } }
+        shapes.clear()
+    }
+
+    /** Drops the shape being placed (e.g. when switching modes). GL thread only. */
+    fun discardDraft() {
+        draft.forEach { it.anchor.detach() }
+        draft.clear()
+        draftMode = null
     }
 
     /**

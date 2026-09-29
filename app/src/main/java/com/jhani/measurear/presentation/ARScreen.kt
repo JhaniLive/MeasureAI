@@ -78,6 +78,10 @@ import com.jhani.measurear.ar.ARSurfaceView
 import com.jhani.measurear.ar.MeasureAction
 import com.jhani.measurear.level.LevelScreen
 import com.jhani.measurear.measurement.MeasureUnit
+import com.jhani.measurear.measurement.MeasureMode
+import com.jhani.measurear.measurement.ShapeResultUi
+import com.jhani.measurear.measurement.ResultValue
+import com.jhani.measurear.measurement.formatValue
 import com.jhani.measurear.measurement.ReticleState
 import com.jhani.measurear.measurement.SnapAxis
 import com.jhani.measurear.measurement.StraightenMode
@@ -109,6 +113,9 @@ fun ARScreen(
     LaunchedEffect(showGrid) { sessionManager.showGrid = showGrid }
     var debugOn by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(debugOn) { sessionManager.debugView = debugOn }
+    var mode by rememberSaveable { mutableStateOf(MeasureMode.LINE) }
+    LaunchedEffect(mode) { sessionManager.mode = mode }
+    var showModes by remember { mutableStateOf(false) }
     var magnifierOn by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(magnifierOn) { sessionManager.magnifierEnabled = magnifierOn }
     // Off by default: depth noise on this class of phone hid grid dots on the surface itself
@@ -123,10 +130,8 @@ fun ARScreen(
         sessionManager.completed.collect { done ->
             delay(250) // let the new line and label draw before the photo
             val bitmap = activity?.let { HistoryStore.captureScreen(it, cameraView) }
-            val value = if (done.summary.isArea) {
-                formatArea(done.summary.value, done.summary.isEstimate, currentUnit)
-            } else {
-                formatDistance(done.summary.value, done.summary.isEstimate, currentUnit)
+            val value = done.summary.let {
+                formatValue(ResultValue(it.label ?: "", it.value, it.kind), it.isEstimate, currentUnit)
             }
             HistoryStore.add(context, "${done.label} · $value", listOf(done.summary), bitmap)
         }
@@ -299,6 +304,9 @@ fun ARScreen(
                     !ui.isTracking -> ui.trackingMessage ?: "Let's get started — move the phone slowly"
                     ui.surfaceCount == 0 -> "Scanning with you — sweep slowly over a table or floor"
                     ui.reticle == ReticleState.SEARCHING -> "Nothing under the crosshair — step back ~50 cm and aim at the teal dots"
+                    ui.mode != MeasureMode.LINE && ui.reticle == ReticleState.ESTIMATE ->
+                        "Approximate here (≈) — on the teal dots it's exact"
+                    ui.mode != MeasureMode.LINE -> ui.mode.howTo
                     (ui.targetMeters ?: 1f) < 0.2f -> "Too close — step back about 50 cm"
                     ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
                     ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
@@ -333,6 +341,8 @@ fun ARScreen(
                 }
 
                 HudTopBar(
+                    mode = mode,
+                    onModeClick = { showModes = true },
                     onToggleDebug = {
                         debugOn = !debugOn
                         hint = if (debugOn) "Debug view on — feature points, surfaces, stats" else "Debug view off"
@@ -383,12 +393,16 @@ fun ARScreen(
                 }
 
                 MeasureControls(
+                    mode = ui.mode,
+                    result = ui.result,
+                    draftCount = ui.draftCount,
+                    onDone = { sessionManager.requestAction(MeasureAction.FinishShape) },
                     liveMeters = ui.liveMeters,
                     liveIsEstimate = ui.liveIsEstimate,
                     snapAxis = ui.snapAxis,
                     unit = unit,
                     canAdd = ui.isTracking && ui.reticle != ReticleState.SEARCHING,
-                    canUndo = ui.hasPendingPoint || ui.lineCount > 0,
+                    canUndo = ui.hasPendingPoint || ui.lineCount > 0 || ui.draftCount > 0 || ui.summaries.isNotEmpty(),
                     onUndo = { sessionManager.requestAction(MeasureAction.Undo) },
                     onAdd = { pressedAt -> sessionManager.requestAction(MeasureAction.AddPoint(pressedAt)) },
                     onClear = { sessionManager.requestAction(MeasureAction.Clear) },
@@ -428,6 +442,17 @@ fun ARScreen(
                         )
                     }
                 }
+
+                ModePickerSheet(
+                    visible = showModes,
+                    current = mode,
+                    onSelect = {
+                        mode = it
+                        showModes = false
+                        hint = "${it.title} — ${it.howTo}"
+                    },
+                    onDismiss = { showModes = false }
+                )
 
                 lastCapture?.let { saved ->
                     SavedToast(
@@ -501,6 +526,8 @@ fun ARScreen(
  */
 @Composable
 private fun HudTopBar(
+    mode: MeasureMode,
+    onModeClick: () -> Unit,
     onToggleDebug: () -> Unit,
     guidance: String,
     targetMeters: Float?,
@@ -527,14 +554,12 @@ private fun HudTopBar(
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "MeasureAR",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    // Hidden developer switch: long-press toggles the debug view
-                    modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onToggleDebug)
-                )
+                // Current mode; tap for the mode picker. Hidden developer switch: long-press
+                // toggles the debug view
+                Box(Modifier.combinedClickable(onClick = onModeClick, onLongClick = onToggleDebug)) {
+                    ModeChip(mode = mode, onClick = onModeClick)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
                 AnimatedContent(
                     targetState = guidance,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -656,6 +681,10 @@ private fun UnitToggle(unit: MeasureUnit, onUnitChange: (MeasureUnit) -> Unit, m
  */
 @Composable
 private fun MeasureControls(
+    mode: MeasureMode,
+    result: ShapeResultUi?,
+    draftCount: Int,
+    onDone: () -> Unit,
     liveMeters: Float?,
     liveIsEstimate: Boolean,
     snapAxis: SnapAxis?,
@@ -678,20 +707,38 @@ private fun MeasureControls(
             .padding(top = 32.dp, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Alignment badge, e.g. "VERTICAL" while measuring a height
-        Text(
-            text = snapAxis?.label?.uppercase() ?: " ",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.5.sp,
-            color = HudAmber
-        )
-        Text(
-            text = liveMeters?.let { formatDistance(it, liveIsEstimate, unit) } ?: " ",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
+        if (mode == MeasureMode.LINE) {
+            // Alignment badge, e.g. "VERTICAL" while measuring a height
+            Text(
+                text = snapAxis?.label?.uppercase() ?: " ",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.5.sp,
+                color = HudAmber
+            )
+            Text(
+                text = liveMeters?.let { formatDistance(it, liveIsEstimate, unit) } ?: " ",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        } else {
+            ResultCard(result = result, mode = mode, draftCount = draftCount, unit = unit)
+            // Open-ended shapes (Path, Area) finish with Done
+            if (mode.points == null && draftCount >= mode.minPoints) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "✓  Done",
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(HudTeal)
+                        .clickable(onClick = onDone)
+                        .padding(horizontal = 22.dp, vertical = 8.dp),
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(14.dp))
         Row(
             modifier = Modifier

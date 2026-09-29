@@ -175,3 +175,15 @@ object ShapeMath {
         }
     }
 }
+
+/**
+ * A finished shape: its anchored points (re-read every frame, so ARCore's refinements carry
+ * through) and the surface normal it was measured on.
+ */
+class MeasuredShape(
+    val mode: MeasureMode,
+    val points: List<PlacedPoint>,
+    val normal: Vec3
+) {
+    val isEstimate: Boolean get() = points.any { !it.onSurface }
+}

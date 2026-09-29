@@ -36,6 +36,10 @@ import com.jhani.measurear.measurement.MeasureUnit
 import com.jhani.measurear.measurement.ReticleState
 import com.jhani.measurear.measurement.ScreenSegment
 import com.jhani.measurear.measurement.formatDistance
+import com.jhani.measurear.measurement.formatValue
+import com.jhani.measurear.measurement.ScreenPolygon
+import com.jhani.measurear.measurement.ScreenValueLabel
+import com.jhani.measurear.measurement.ValueKind
 
 val HudTeal = Color(0xFF1DE9D0)
 val HudTealDark = Color(0xFF0B3B38)
@@ -82,6 +86,7 @@ fun MeasureOverlay(
         labelHits.clear()
 
         ui.areas.forEach { drawAreaFill(it) }
+        ui.fills.forEach { drawShapeFill(it) }
         ui.guide?.let { drawGuide(it) }
         ui.segments.forEach { drawSegment(it) }
 
@@ -90,10 +95,12 @@ fun MeasureOverlay(
         }
 
         ui.segments.forEach { segment ->
+            if (!segment.labelled) return@forEach
             val rect = drawLabel(segment, unit, textMeasurer)
             if (rect != null && segment.lineIndex >= 0) labelHits.add(rect to segment.lineIndex)
         }
         ui.areas.forEach { drawAreaLabel(it, unit, textMeasurer) }
+        ui.sceneLabels.forEach { drawValueLabel(it, unit, textMeasurer) }
 
         drawOffscreenArrow(ui, unit, textMeasurer)
         if (ui.isTracking && ui.loupeVisible) drawLoupe(ui)
@@ -358,4 +365,39 @@ private fun DrawScope.drawReticle(state: ReticleState, aligned: Boolean) {
     val dotRadius = (if (snapped) 6.dp else 3.5.dp).toPx()
     drawCircle(ShadowColor, radius = dotRadius + 1.5.dp.toPx(), center = c)
     drawCircle(Color.White, radius = dotRadius, center = c)
+}
+
+/** Translucent fill for a shape-mode outline (rectangle, area, circle, box base). */
+private fun DrawScope.drawShapeFill(poly: ScreenPolygon) {
+    if (poly.xs.size < 3) return
+    val path = Path().apply {
+        moveTo(poly.xs[0], poly.ys[0])
+        for (i in 1 until poly.xs.size) lineTo(poly.xs[i], poly.ys[i])
+        close()
+    }
+    drawPath(path, HudTeal.copy(alpha = if (poly.isEstimate) 0.10f else 0.20f))
+}
+
+/** Value pill in the scene: edge length, angle at its corner, radius, height. */
+private fun DrawScope.drawValueLabel(label: ScreenValueLabel, unit: MeasureUnit, textMeasurer: TextMeasurer) {
+    val isAngle = label.value.kind == ValueKind.ANGLE
+    val layout = textMeasurer.measure(
+        text = formatValue(label.value, label.isEstimate, unit),
+        style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isAngle) HudTeal else Color.Black)
+    )
+    val padH = 9.dp.toPx()
+    val padV = 4.dp.toPx()
+    val box = Size(layout.size.width + padH * 2, layout.size.height + padV * 2)
+    // Angles sit just above their corner so the vertex stays visible
+    val cy = if (isAngle) label.y - box.height else label.y
+    val topLeft = Offset(label.x - box.width / 2f, cy - box.height / 2f)
+    val radius = CornerRadius(box.height / 2f)
+    drawRoundRect(ShadowColor, topLeft + Offset(0f, 1.5.dp.toPx()), box, radius)
+    if (isAngle) {
+        drawRoundRect(HudTealDark.copy(alpha = 0.92f), topLeft, box, radius)
+        drawRoundRect(HudTeal, topLeft, box, radius, style = Stroke(1.5.dp.toPx()))
+    } else {
+        drawRoundRect(if (label.isEstimate) EstimateLabelColor else Color.White, topLeft, box, radius)
+    }
+    drawText(layout, topLeft = Offset(topLeft.x + padH, topLeft.y + padV))
 }

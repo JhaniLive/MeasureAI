@@ -13,6 +13,7 @@ import android.view.SurfaceView
 import androidx.core.content.FileProvider
 import com.jhani.measurear.measurement.MeasureUnit
 import com.jhani.measurear.measurement.MeasurementSummary
+import com.jhani.measurear.measurement.ValueKind
 import com.jhani.measurear.measurement.formatSummaries
 import java.io.File
 import java.util.UUID
@@ -148,6 +149,8 @@ object HistoryStore {
                     put("isEstimate", item.isEstimate)
                     put("horizontal", item.horizontal.toDouble())
                     put("vertical", item.vertical.toDouble())
+                    put("kind", item.kind.name)
+                    item.label?.let { put("label", it) }
                 })
             }
         })
@@ -167,7 +170,10 @@ object HistoryStore {
                     isArea = item.optBoolean("isArea"),
                     isEstimate = item.optBoolean("isEstimate"),
                     horizontal = item.optDouble("horizontal", 0.0).toFloat(),
-                    vertical = item.optDouble("vertical", 0.0).toFloat()
+                    vertical = item.optDouble("vertical", 0.0).toFloat(),
+                    kind = item.optString("kind").let { k -> ValueKind.values().firstOrNull { it.name == k } }
+                        ?: if (item.optBoolean("isArea")) ValueKind.AREA else ValueKind.LENGTH,
+                    label = if (item.has("label")) item.optString("label") else null
                 )
             }
         )

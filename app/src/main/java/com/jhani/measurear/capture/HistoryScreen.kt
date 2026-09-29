@@ -55,6 +55,9 @@ import androidx.compose.ui.unit.dp
 import com.jhani.measurear.R
 import com.jhani.measurear.measurement.MeasureUnit
 import com.jhani.measurear.measurement.formatArea
+import com.jhani.measurear.measurement.formatValue
+import com.jhani.measurear.measurement.ResultValue
+import com.jhani.measurear.measurement.ValueKind
 import com.jhani.measurear.measurement.formatDistance
 import com.jhani.measurear.measurement.formatLength
 import com.jhani.measurear.presentation.HudTeal
@@ -226,8 +229,8 @@ private fun RecordCard(
             Spacer(modifier = Modifier.height(6.dp))
             record.items.forEach { item ->
                 Text(
-                    text = if (item.isArea) {
-                        "Area  " + formatArea(item.value, item.isEstimate, unit)
+                    text = if (item.label != null || item.kind != ValueKind.LENGTH) {
+                        (item.label ?: "Area") + "  " + formatValue(ResultValue(item.label ?: "", item.value, item.kind), item.isEstimate, unit)
                     } else {
                         formatDistance(item.value, item.isEstimate, unit) +
                             "   ↔ ${formatLength(item.horizontal, unit)}  ↕ ${formatLength(item.vertical, unit)}"

@@ -269,10 +269,12 @@ class ARSessionManager(private val context: Context) {
                 Log.i(TAG, "ARCore Depth API supported: $depthSupported")
 
                 val config = Config(newSession).apply {
-                    updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+                    // Every hit test uses a fresh camera frame, never a stale one
+                    updateMode = Config.UpdateMode.BLOCKING
                     planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
-                    // Autofocus keeps close tabletop objects sharp (fixed focus blurs under ~50 cm)
-                    focusMode = Config.FocusMode.AUTO
+                    // Fixed focus is better for tracking (ARCore docs): refocusing shifts the lens
+                    // intrinsics that scale is computed from. Close objects (<~50 cm) look softer.
+                    focusMode = Config.FocusMode.FIXED
                     // Measuring needs real geometry: no lighting estimation, no instant placement
                     lightEstimationMode = Config.LightEstimationMode.DISABLED
                     instantPlacementMode = Config.InstantPlacementMode.DISABLED
@@ -319,15 +321,14 @@ class ARSessionManager(private val context: Context) {
     }
 
     /**
-     * Picks a 30 fps back-camera config with the sharpest GPU texture for the preview.
-     * Must run before the session is first resumed.
+     * Picks ARCore's recommended 30 fps back-camera config: the list comes sorted best first
+     * for tracking. Must run before the session is first resumed.
      */
     private fun selectCameraConfig(session: Session) {
         val filter = CameraConfigFilter(session)
             .setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
-            .setDepthSensorUsage(EnumSet.of(CameraConfig.DepthSensorUsage.DO_NOT_USE))
         val configs = session.getSupportedCameraConfigs(filter)
-        val best = configs.maxByOrNull { it.textureSize.width * it.textureSize.height } ?: return
+        val best = configs.firstOrNull() ?: return
         session.cameraConfig = best
         Log.i(TAG, "Camera config: texture ${best.textureSize}, image ${best.imageSize}, fps ${best.fpsRange}")
     }

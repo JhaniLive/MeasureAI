@@ -126,6 +126,14 @@ fun ARScreen(
     LaunchedEffect(mode) { sessionManager.mode = mode }
     var showModes by remember { mutableStateOf(false) }
     var showPhoneHeight by remember { mutableStateOf(false) }
+    // Calibration factor for this session, and a finished calibration measurement to confirm
+    var scale by rememberSaveable { mutableStateOf(1f) }
+    LaunchedEffect(scale) { sessionManager.scale = scale }
+    var calibrationSample by remember { mutableStateOf<ARSessionManager.CalibrationSample?>(null) }
+    var modeBeforeCalibration by rememberSaveable { mutableStateOf(MeasureMode.LINE) }
+    LaunchedEffect(sessionManager) {
+        sessionManager.calibration.collect { calibrationSample = it }
+    }
     var farPhoneHeight by rememberSaveable { mutableStateOf(1.45f) }
     LaunchedEffect(farPhoneHeight) { sessionManager.farPhoneHeight = farPhoneHeight }
     var magnifierOn by rememberSaveable { mutableStateOf(true) }
@@ -483,9 +491,35 @@ fun ARScreen(
                     )
                 }
 
+                calibrationSample?.let { sample ->
+                    CalibrationDialog(
+                        measuredMeters = sample.meters,
+                        onSurface = sample.onSurface,
+                        unit = unit,
+                        onApply = { factor ->
+                            scale = factor
+                            calibrationSample = null
+                            mode = modeBeforeCalibration
+                            hint = "Calibrated — readings corrected by ${"%+.1f".format((factor - 1f) * 100)}%"
+                        },
+                        onRetry = { calibrationSample = null },
+                        onDismiss = {
+                            calibrationSample = null
+                            mode = modeBeforeCalibration
+                        }
+                    )
+                }
+
                 ModePickerSheet(
                     visible = showModes,
                     current = mode,
+                    scale = scale,
+                    onCalibrate = {
+                        if (mode != MeasureMode.CALIBRATE) modeBeforeCalibration = mode
+                        mode = MeasureMode.CALIBRATE
+                        showModes = false
+                        hint = MeasureMode.CALIBRATE.howTo
+                    },
                     onSelect = {
                         mode = it
                         showModes = false

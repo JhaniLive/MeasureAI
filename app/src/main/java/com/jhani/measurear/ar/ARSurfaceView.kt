@@ -946,12 +946,13 @@ class ARSurfaceView(
         val e = line.end.anchor.pose
         val dx = e.tx() - s.tx()
         val dz = e.tz() - s.tz()
+        val k = sessionManager.scale
         return MeasurementSummary(
-            distanceBetween(s, e),
+            distanceBetween(s, e) * k,
             isArea = false,
             isEstimate = line.isEstimate,
-            horizontal = sqrt(dx * dx + dz * dz),
-            vertical = abs(e.ty() - s.ty())
+            horizontal = sqrt(dx * dx + dz * dz) * k,
+            vertical = abs(e.ty() - s.ty()) * k
         )
     }
 
@@ -1100,7 +1101,7 @@ class ARSurfaceView(
                 sessionManager.emitCompleted(
                     "Area",
                     MeasurementSummary(
-                        polygonArea(area.lines.map { it.start.anchor.pose }),
+                        polygonArea(area.lines.map { it.start.anchor.pose }) * sessionManager.scale * sessionManager.scale,
                         isArea = true,
                         isEstimate = area.isEstimate
                     )
@@ -1341,6 +1342,16 @@ class ARSurfaceView(
             sessionManager.showHint("${mode.title} needs at least $min points")
             return
         }
+        if (mode == MeasureMode.CALIBRATE) {
+            // Raw (unscaled) length of the reference; the UI asks what it was and applies it
+            val a = draft[0]
+            val b = draft[1]
+            sessionManager.emitCalibration(
+                ARSessionManager.CalibrationSample(distanceBetween(a.anchor.pose, b.anchor.pose), a.onSurface && b.onSurface)
+            )
+            sessionManager.discardDraft()
+            return
+        }
         val shape = MeasuredShape(mode, draft.toList(), sessionManager.draftNormal)
         sessionManager.shapes.add(shape)
         draft.clear()
@@ -1366,16 +1377,22 @@ class ARSurfaceView(
         normal: Vec3?,
         camera: Vec3? = null,
         estimate: Boolean = false
-    ): ShapeResult? =
-        if (mode == MeasureMode.FAR) {
+    ): ShapeResult? {
+        // Calibration correction: scaling the points scales lengths, areas and volumes alike.
+        // Calibrate itself is always measured raw.
+        val k = if (mode == MeasureMode.CALIBRATE) 1f else sessionManager.scale
+        val p = if (k == 1f) pts else pts.map { it * k }
+        val c = camera?.let { it * k }
+        return if (mode == MeasureMode.FAR) {
             // A typed-in phone height is known to ~15 cm; a detected ground to ~2 cm
-            ShapeMath.compute(mode, pts, normal, camera, phoneHeightError = if (estimate) 0.15f else 0.02f)
+            ShapeMath.compute(mode, p, normal, c, phoneHeightError = if (estimate) 0.15f else 0.02f)
         } else if (mode == MeasureMode.DISTANCE) {
-            val cam = pts.getOrNull(1) ?: camera
-            if (cam == null) null else ShapeMath.compute(mode, pts.take(1), normal, cam)
+            val cam = p.getOrNull(1) ?: c
+            if (cam == null) null else ShapeMath.compute(mode, p.take(1), normal, cam)
         } else {
-            ShapeMath.compute(mode, pts, normal)
+            ShapeMath.compute(mode, p, normal)
         }
+    }
 
     private class ShapeUi(
         val fills: List<ScreenPolygon>,
@@ -1468,19 +1485,7 @@ class ARSurfaceView(
         val summaries = ArrayList<MeasurementSummary>()
 
         sessionManager.lines.forEachIndexed { index, line ->
-            val s = line.start.anchor.pose
-            val e = line.end.anchor.pose
-            val dx = e.tx() - s.tx()
-            val dz = e.tz() - s.tz()
-            summaries.add(
-                MeasurementSummary(
-                    distanceBetween(s, e),
-                    isArea = false,
-                    isEstimate = line.isEstimate,
-                    horizontal = sqrt(dx * dx + dz * dz),
-                    vertical = abs(e.ty() - s.ty())
-                )
-            )
+            summaries.add(lineSummary(line))
             if (line.start.anchor.trackingState != TrackingState.TRACKING ||
                 line.end.anchor.trackingState != TrackingState.TRACKING
             ) {
@@ -1494,7 +1499,7 @@ class ARSurfaceView(
         val areas = ArrayList<ScreenArea>()
         for (area in sessionManager.areas) {
             val poses = area.lines.map { it.start.anchor.pose }
-            val squareMeters = polygonArea(poses)
+            val squareMeters = polygonArea(poses) * sessionManager.scale * sessionManager.scale
             summaries.add(MeasurementSummary(squareMeters, isArea = true, isEstimate = area.isEstimate))
             if (area.lines.any { it.start.anchor.trackingState != TrackingState.TRACKING }) continue
             val screen = poses.map { projectToScreen(it) }
@@ -1518,7 +1523,7 @@ class ARSurfaceView(
             if (reticle != null) {
                 val liveStart = reticle.replaceStart ?: startPose
                 liveIsEstimate = (reticle.replaceStart == null && !pending.onSurface) || !reticle.onSurface
-                liveMeters = distanceBetween(liveStart, reticle.pose)
+                liveMeters = distanceBetween(liveStart, reticle.pose) * sessionManager.scale
                 projectSegment(liveStart, reticle.pose, liveIsEstimate, isLive = true)?.let(segments::add)
             }
         }
@@ -1681,7 +1686,7 @@ class ARSurfaceView(
         return ScreenSegment(
             startX = sa[0], startY = sa[1],
             endX = sb[0], endY = sb[1],
-            meters = distanceBetween(start, end),
+            meters = distanceBetween(start, end) * sessionManager.scale,
             isEstimate = isEstimate,
             isLive = isLive,
             startVisible = aVisible,

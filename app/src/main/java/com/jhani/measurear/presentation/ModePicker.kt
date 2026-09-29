@@ -27,7 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,7 +78,10 @@ fun ModePickerSheet(
     visible: Boolean,
     current: MeasureMode,
     onSelect: (MeasureMode) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Current calibration factor (1 = not calibrated). */
+    scale: Float = 1f,
+    onCalibrate: () -> Unit = {}
 ) {
     AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
         Box(
@@ -118,7 +123,7 @@ fun ModePickerSheet(
                     modifier = Modifier.padding(start = 4.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-                MeasureMode.values().toList().chunked(3).forEach { row ->
+                MeasureMode.values().filter { it.inPicker }.chunked(3).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEach { mode ->
                             ModeCard(mode, selected = mode == current, onClick = { onSelect(mode) }, modifier = Modifier.weight(1f))
@@ -126,6 +131,31 @@ fun ModePickerSheet(
                     }
                     Spacer(Modifier.height(10.dp))
                 }
+                // Accuracy: calibrate against a card
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(CardColor)
+                        .border(1.dp, HudTeal.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                        .clickable(onClick = onCalibrate)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🎯", fontSize = 22.sp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Calibrate with a card", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(
+                            if (scale == 1f) "Measure a bank card once to make every reading more accurate"
+                            else "Calibrated: readings corrected by ${"%+.1f".format((scale - 1f) * 100)}% · tap to redo",
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 11.sp
+                        )
+                    }
+                    Text("›", color = HudTeal, fontSize = 22.sp)
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     androidx.compose.ui.text.buildAnnotatedString {
                         append("Built with ")
@@ -210,6 +240,15 @@ fun ModeIllustration(mode: MeasureMode, modifier: Modifier = Modifier, compact: 
                 line(p(0.5f, 0.85f), p(0.5f, 0.15f), dashed = true)
                 line(p(0.4f, 0.15f), p(0.6f, 0.15f))
                 dots(0.5f to 0.85f, 0.5f to 0.15f)
+            }
+            MeasureMode.CALIBRATE -> {
+                // A card with its long edge measured
+                drawRoundRect(HudTeal.copy(alpha = 0.22f), p(0.18f, 0.3f), Size(w * 0.64f, h * 0.4f),
+                    androidx.compose.ui.geometry.CornerRadius(stroke * 3))
+                drawRoundRect(HudTeal, p(0.18f, 0.3f), Size(w * 0.64f, h * 0.4f),
+                    androidx.compose.ui.geometry.CornerRadius(stroke * 3), style = Stroke(stroke))
+                line(p(0.18f, 0.82f), p(0.82f, 0.82f))
+                dots(0.18f to 0.82f, 0.82f to 0.82f)
             }
             MeasureMode.FAR -> {
                 // Distant building; sight lines from the phone to its base and top
@@ -389,6 +428,86 @@ fun PhoneHeightDialog(height: Float, unit: MeasureUnit, onChange: (Float) -> Uni
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 color = Color.Black,
                 fontWeight = FontWeight.SemiBold
+            )
+        }
+    )
+}
+
+/**
+ * After measuring a reference object in Calibrate mode: pick what was measured, see the
+ * correction, and apply it.
+ */
+@Composable
+fun CalibrationDialog(
+    measuredMeters: Float,
+    onSurface: Boolean,
+    unit: MeasureUnit,
+    onApply: (Float) -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var reference by androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableStateOf(com.jhani.measurear.measurement.Calibration.Reference.CARD)
+    }
+    val factor = com.jhani.measurear.measurement.Calibration.factorFor(measuredMeters, reference.meters)
+    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF0E1614),
+        title = { Text("Calibration", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Text("What did you measure?", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+                com.jhani.measurear.measurement.Calibration.Reference.values().forEach { ref ->
+                    val selected = ref == reference
+                    Text(
+                        "${ref.label} · ${fmt(ref.meters)}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selected) HudTealDark else CardColor)
+                            .border(1.dp, if (selected) HudTeal else Color.Transparent, RoundedCornerShape(12.dp))
+                            .clickable { reference = ref }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        color = Color.White,
+                        fontSize = 13.sp
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Text("Measured ${fmt(measuredMeters)}  ·  real ${fmt(reference.meters)}", color = Color.White, fontSize = 15.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    when {
+                        !onSurface -> "Both ends need to be on the teal dots for a reliable calibration. Try again on a detected surface."
+                        factor == null -> "That's too far off to be a scale error — a point probably missed the edge. Try again."
+                        else -> "Every measurement will be corrected by ${"%+.1f".format((factor - 1f) * 100)}% " +
+                            "for this session."
+                    },
+                    color = if (!onSurface || factor == null) HudAmber else HudTeal,
+                    fontSize = 13.sp
+                )
+            }
+        },
+        confirmButton = {
+            val ok = onSurface && factor != null
+            Text(
+                if (ok) "Apply" else "Try again",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HudTeal)
+                    .clickable { if (ok) onApply(factor!!) else onRetry() }
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                color = Color.Black,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        dismissButton = {
+            Text(
+                "Cancel",
+                modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
+                color = Color.White.copy(alpha = 0.7f)
             )
         }
     )

@@ -11,7 +11,9 @@ enum class MeasureMode(
     /** Points that complete the shape; null = open-ended (finish with Done). */
     val points: Int?,
     /** Fewest points before Done is allowed (open-ended modes). */
-    val minPoints: Int = points ?: 2
+    val minPoints: Int = points ?: 2,
+    /** Shown in the mode picker grid (Calibrate is started from its own button). */
+    val inPicker: Boolean = true
 ) {
     LINE("Line", "Tap two points", 2),
     HEIGHT("Height", "Tap the base on the floor or table, then tilt up to the top", 2),
@@ -22,7 +24,8 @@ enum class MeasureMode(
     RECTANGLE("Rectangle", "Tap three corners — the fourth is added for you", 3),
     CIRCLE("Circle", "Tap the center, then a point on the edge", 2),
     AREA("Area", "Tap each corner, then back on the first to close", null, minPoints = 3),
-    VOLUME("Volume", "Tap three corners of the base, then tilt up to the top", 4)
+    VOLUME("Volume", "Tap three corners of the base, then tilt up to the top", 4),
+    CALIBRATE("Calibrate", "Lay a bank card flat on the teal dots, then tap both ends of its long edge", 2, inPicker = false)
 }
 
 /** What a result value measures, so the UI formats it with the right unit. */
@@ -81,7 +84,7 @@ object ShapeMath {
         val empty = ShapeResult(emptyList(), null, emptyList(), emptyList())
 
         return when (mode) {
-            MeasureMode.LINE, MeasureMode.HEIGHT -> {
+            MeasureMode.LINE, MeasureMode.HEIGHT, MeasureMode.CALIBRATE -> {
                 if (pts.size < 2) return empty
                 val (a, b) = pts[0] to pts[1]
                 val d = a.distanceTo(b)

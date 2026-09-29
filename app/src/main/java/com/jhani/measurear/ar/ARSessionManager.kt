@@ -126,6 +126,23 @@ class ARSessionManager(private val context: Context) {
     @Volatile
     var mode: com.jhani.measurear.measurement.MeasureMode = com.jhani.measurear.measurement.MeasureMode.LINE
 
+    /**
+     * Scale correction from calibration (1 = none). Multiplies every measured length (areas
+     * and volumes follow, since the points are scaled). UI writes, GL reads.
+     */
+    @Volatile
+    var scale: Float = 1f
+
+    /** A calibration measurement finished: raw length (m) and whether both ends were on a surface. */
+    data class CalibrationSample(val meters: Float, val onSurface: Boolean)
+
+    private val _calibration = MutableSharedFlow<CalibrationSample>(extraBufferCapacity = 1)
+    val calibration: SharedFlow<CalibrationSample> = _calibration.asSharedFlow()
+
+    fun emitCalibration(sample: CalibrationSample) {
+        _calibration.tryEmit(sample)
+    }
+
     /** Far mode: phone height above the ground when no ground is detected. UI writes, GL reads. */
     @Volatile
     var farPhoneHeight: Float = 1.45f

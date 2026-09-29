@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the launcher icon: jump straight into a measuring mode -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="height"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_height"
+        android:shortcutShortLabel="@string/shortcut_height">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.jhani.measurear"
+            android:targetClass="com.jhani.measurear.MainActivity">
+            <extra android:name="mode" android:value="HEIGHT" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="area"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_area"
+        android:shortcutShortLabel="@string/shortcut_area">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.jhani.measurear"
+            android:targetClass="com.jhani.measurear.MainActivity">
+            <extra android:name="mode" android:value="AREA" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="far"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_far"
+        android:shortcutShortLabel="@string/shortcut_far">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.jhani.measurear"
+            android:targetClass="com.jhani.measurear.MainActivity">
+            <extra android:name="mode" android:value="FAR" />
+        </intent>
+    </shortcut>
+</shortcuts>

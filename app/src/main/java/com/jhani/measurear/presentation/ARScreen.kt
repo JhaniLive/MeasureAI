@@ -95,7 +95,10 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun ARScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Mode requested by a launcher shortcut (null = none). */
+    requestedMode: MeasureMode? = null,
+    onModeRequestHandled: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -125,6 +128,12 @@ fun ARScreen(
     var mode by rememberSaveable { mutableStateOf(MeasureMode.LINE) }
     LaunchedEffect(mode) { sessionManager.mode = mode }
     var showModes by remember { mutableStateOf(false) }
+    LaunchedEffect(requestedMode) {
+        if (requestedMode != null) {
+            mode = requestedMode
+            onModeRequestHandled()
+        }
+    }
     var showPhoneHeight by remember { mutableStateOf(false) }
     // Calibration factor for this session, and a finished calibration measurement to confirm
     var scale by rememberSaveable { mutableStateOf(1f) }

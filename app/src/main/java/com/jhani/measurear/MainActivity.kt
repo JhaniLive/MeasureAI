@@ -1,5 +1,6 @@
 package com.jhani.measurear
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -8,12 +9,27 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.jhani.measurear.measurement.MeasureMode
 import com.jhani.measurear.presentation.ARScreen
 import com.jhani.measurear.presentation.StampKeys
 import com.jhani.measurear.ui.theme.MeasureARTheme
 
 class MainActivity : ComponentActivity() {
+
+    /** Mode asked for by a launcher shortcut, until the screen picks it up. */
+    private val requestedMode = mutableStateOf<MeasureMode?>(null)
+
+    private fun readMode(intent: Intent?) {
+        val name = intent?.getStringExtra("mode") ?: return
+        requestedMode.value = MeasureMode.values().firstOrNull { it.name == name }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        readMode(intent)
+    }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val isVolume = keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
@@ -28,10 +44,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Keep the display awake while measuring
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        readMode(intent)
         setContent {
             MeasureARTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    ARScreen()
+                    ARScreen(
+                        requestedMode = requestedMode.value,
+                        onModeRequestHandled = { requestedMode.value = null }
+                    )
                 }
             }
         }

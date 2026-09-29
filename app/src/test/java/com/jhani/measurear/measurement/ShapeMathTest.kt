@@ -71,6 +71,21 @@ class ShapeMathTest {
         assertEquals(0.9f * 2.1f, r.value("Area"), 1e-3f)
     }
 
+    @Test fun farBuilding() {
+        // 30 m building, base 40 m away, phone 1.5 m above the ground
+        val pts = listOf(v(0f, 0f, -40f), v(0f, 1.5f, 0f), v(0f, 30f, -40f))
+        val r = ShapeMath.compute(MeasureMode.FAR, pts)
+        assertEquals(30f, r.value("Height"), 1e-3f)
+        assertEquals(40f, r.value("Distance to base"), 1e-3f)
+        val err = r.value("± Height")
+        assertTrue("error $err", err > 0.3f && err < 5f) // honest, not zero, not absurd
+    }
+
+    @Test fun farBaseOnlyShowsDistance() {
+        val r = ShapeMath.compute(MeasureMode.FAR, listOf(v(3f, 0f, -4f)), camera = v(0f, 1.4f, 0f))
+        assertEquals(5f, r.value("Distance to base"), 1e-4f)
+    }
+
     @Test fun volumeBox() {
         val pts = listOf(v(0f, 0f, 0f), v(0.5f, 0f, 0f), v(0.5f, 0f, 0.4f), v(0.5f, 0.3f, 0f))
         val r = ShapeMath.compute(MeasureMode.VOLUME, pts)

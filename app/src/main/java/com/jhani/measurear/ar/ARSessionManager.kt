@@ -126,6 +126,10 @@ class ARSessionManager(private val context: Context) {
     @Volatile
     var mode: com.jhani.measurear.measurement.MeasureMode = com.jhani.measurear.measurement.MeasureMode.LINE
 
+    /** Far mode: phone height above the ground when no ground is detected. UI writes, GL reads. */
+    @Volatile
+    var farPhoneHeight: Float = 1.45f
+
     /** Finished shapes of every mode except Line (which uses [lines]). GL thread only. */
     val shapes = mutableListOf<com.jhani.measurear.measurement.MeasuredShape>()
 
@@ -190,7 +194,10 @@ class ARSessionManager(private val context: Context) {
     /** Removes the pending point, or the most recent completed line / shape. GL thread only. */
     fun undo() {
         val pending = pendingStart
-        if (draft.isNotEmpty()) {
+        if (draft.isNotEmpty() && draftMode == com.jhani.measurear.measurement.MeasureMode.FAR) {
+            // Far keeps [base, where you stood]: undoing either one undoes the base
+            discardDraft()
+        } else if (draft.isNotEmpty()) {
             draft.removeAt(draft.lastIndex).anchor.detach()
             if (draft.isEmpty()) draftMode = null
         } else if (mode != com.jhani.measurear.measurement.MeasureMode.LINE && shapes.isNotEmpty()) {

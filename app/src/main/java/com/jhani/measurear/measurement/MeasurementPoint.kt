@@ -186,6 +186,9 @@ data class MeasureUiState(
     val areas: List<ScreenArea> = emptyList(),
     /** Every completed line and area, including off-screen ones (for sharing / history). */
     val summaries: List<MeasurementSummary> = emptyList(),
+    /** Far mode: the ground under the phone was detected, and the phone's height above it (m). */
+    val groundDetected: Boolean = false,
+    val phoneHeight: Float = 0f,
     /** Selected mode, and how many points of its current shape are placed. */
     val mode: MeasureMode = MeasureMode.LINE,
     val draftCount: Int = 0,

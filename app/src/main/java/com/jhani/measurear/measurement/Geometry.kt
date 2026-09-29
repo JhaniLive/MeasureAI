@@ -80,6 +80,34 @@ object Geometry {
         return if (n.length < 1e-6f) null else n.normalized()
     }
 
+    /**
+     * Where the ray ([origin], [dir]) meets the level ground at height [groundY], at any
+     * distance (for far objects), or null when the ray doesn't point down at the ground.
+     */
+    fun rayHitsGround(origin: Vec3, dir: Vec3, groundY: Float, maxDistance: Float = 1000f): Vec3? {
+        val d = dir.normalized()
+        if (d.y > -1e-4f || origin.y <= groundY) return null
+        val t = (groundY - origin.y) / d.y
+        if (t <= 0f || t > maxDistance) return null
+        return origin + d * t
+    }
+
+    /**
+     * 1-sigma error (m) of a far height or ground distance measured with angles from a
+     * phone at [phoneHeight] above the ground, [distance] away (horizontally), given the
+     * orientation error [angleErrorDeg] and phone-height error [heightError]. Distance
+     * comes from the angle down to the base: d = h / tan(a), so errors grow roughly with d².
+     */
+    fun farDistanceError(phoneHeight: Float, distance: Float, angleErrorDeg: Float, heightError: Float): Float {
+        if (phoneHeight <= 0f || distance <= 0f) return 0f
+        val a = kotlin.math.atan2(phoneHeight, distance)
+        val da = Math.toRadians(angleErrorDeg.toDouble()).toFloat()
+        // |dd/da| = h / sin²(a); |dd/dh| = d / h
+        val fromAngle = phoneHeight / (kotlin.math.sin(a) * kotlin.math.sin(a)) * da
+        val fromHeight = distance / phoneHeight * heightError
+        return sqrt(fromAngle * fromAngle + fromHeight * fromHeight)
+    }
+
     /** Orthonormal in-plane axes (u, v) for a plane with [normal]. */
     fun planeBasis(normal: Vec3): Pair<Vec3, Vec3> {
         val n = normal.normalized()

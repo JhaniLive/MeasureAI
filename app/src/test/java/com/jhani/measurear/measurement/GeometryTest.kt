@@ -3,6 +3,7 @@ package com.jhani.measurear.measurement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
 import kotlin.math.cos
@@ -72,6 +73,33 @@ class GeometryTest {
         assertEquals(0.2329f, h, 1e-3f)
         // Base at the flask's foot: exact
         assertEquals(0.26f, Geometry.verticalFromBase(v(0f, 0f, -0.7f), cam, top - cam)!!.y, 1e-4f)
+    }
+
+    @Test fun rayHitsGroundFarAway() {
+        // Phone 1.5 m up, looking down 3° at the base of a building: base is ~28.6 m away
+        val a = Math.toRadians(3.0)
+        val dir = v(0f, -Math.sin(a).toFloat(), -Math.cos(a).toFloat())
+        val base = Geometry.rayHitsGround(v(0f, 1.5f, 0f), dir, 0f)!!
+        assertEquals(0f, base.y, 1e-4f)
+        assertEquals(1.5f / Math.tan(a).toFloat(), -base.z, 0.01f)
+        // Looking up never hits the ground
+        assertNull(Geometry.rayHitsGround(v(0f, 1.5f, 0f), v(0f, 0.1f, -1f), 0f))
+    }
+
+    @Test fun farBuildingHeightFromTwoAngles() {
+        // 30 m tall building, 40 m away, phone at 1.5 m: base angle + top angle -> exact height
+        val cam = v(0f, 1.5f, 0f)
+        val base = Geometry.rayHitsGround(cam, v(0f, 0f, -40f) - cam, 0f)!!
+        val top = Geometry.verticalFromBase(base, cam, v(0f, 30f, -40f) - cam)!!
+        assertEquals(40f, -base.z, 1e-3f)
+        assertEquals(30f, top.y - base.y, 1e-3f)
+    }
+
+    @Test fun farErrorGrowsWithDistance() {
+        val near = Geometry.farDistanceError(1.5f, 10f, 0.2f, 0.02f)
+        val far = Geometry.farDistanceError(1.5f, 40f, 0.2f, 0.02f)
+        assertTrue(far > near * 5f) // roughly d²: 16x the angle term
+        assertTrue(near < 0.5f)     // 10 m away: well under half a meter
     }
 
     @Test fun heightRejectsVerticalRay() {

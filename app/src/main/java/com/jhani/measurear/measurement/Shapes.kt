@@ -15,6 +15,7 @@ enum class MeasureMode(
 ) {
     LINE("Line", "Tap two points", 2),
     HEIGHT("Height", "Tap the base on the floor or table, then tilt up to the top", 2),
+    FAR("Far height", "Buildings & trees: aim at the base on the ground, then at the top", 3),
     DISTANCE("Distance", "Aim at any spot — tap to keep the distance from you", 1),
     ANGLE("Angle", "Tap one arm, the corner, then the other arm", 3),
     PATH("Path", "Tap points along the way, then Done", null, minPoints = 2),
@@ -55,7 +56,17 @@ object ShapeMath {
      *
      * @param camera camera position (Distance mode only)
      */
-    fun compute(mode: MeasureMode, pts: List<Vec3>, surfaceNormal: Vec3? = Vec3.UP, camera: Vec3? = null): ShapeResult {
+    /** Orientation error of the phone (1 sigma, degrees) for far measurements. */
+    const val FAR_ANGLE_ERROR_DEG = 0.2f
+
+    fun compute(
+        mode: MeasureMode,
+        pts: List<Vec3>,
+        surfaceNormal: Vec3? = Vec3.UP,
+        camera: Vec3? = null,
+        /** Far mode: how well the phone's height above the ground is known (m). */
+        phoneHeightError: Float = 0.02f
+    ): ShapeResult {
         // Boxes stand on the floor; everything else lies on its surface or its points' plane
         val normal = when {
             mode == MeasureMode.VOLUME -> surfaceNormal ?: Vec3.UP
@@ -76,6 +87,38 @@ object ShapeMath {
                 val d = a.distanceTo(b)
                 val label = if (mode == MeasureMode.HEIGHT) "Height" else "Length"
                 ShapeResult(listOf(listOf(a, b)), null, listOf(SceneLabel((a + b) * 0.5f, len(label, d))), listOf(len(label, d)))
+            }
+
+            MeasureMode.FAR -> {
+                // Points: base on the ground, where the phone was, then the top
+                val base = pts.getOrNull(0) ?: return empty
+                val cam = pts.getOrNull(1) ?: camera ?: return empty
+                val dx = base.x - cam.x
+                val dz = base.z - cam.z
+                val distance = kotlin.math.sqrt(dx * dx + dz * dz)
+                val phoneHeight = cam.y - base.y
+                val dErr = Geometry.farDistanceError(phoneHeight, distance, FAR_ANGLE_ERROR_DEG, phoneHeightError)
+                val top = pts.getOrNull(2)
+                if (top == null) {
+                    return ShapeResult(
+                        emptyList(), null,
+                        listOf(SceneLabel(base, len("Distance", distance))),
+                        listOf(len("Distance to base", distance), len("± Distance", dErr))
+                    )
+                }
+                val h = top.y - base.y
+                // Height error: from the distance error, plus the top angle's own error
+                val beta = kotlin.math.atan2(top.y - cam.y, distance)
+                val cos = kotlin.math.cos(beta)
+                val dBeta = Math.toRadians(FAR_ANGLE_ERROR_DEG.toDouble()).toFloat()
+                val hErr = kotlin.math.sqrt(
+                    (h / distance * dErr).let { it * it } + (distance * dBeta / (cos * cos)).let { it * it }
+                )
+                ShapeResult(
+                    listOf(listOf(base, top)), null,
+                    listOf(SceneLabel((base + top) * 0.5f, len("Height", h))),
+                    listOf(len("Height", h), len("± Height", hErr), len("Distance to base", distance))
+                )
             }
 
             MeasureMode.DISTANCE -> {

@@ -125,6 +125,9 @@ fun ARScreen(
     var mode by rememberSaveable { mutableStateOf(MeasureMode.LINE) }
     LaunchedEffect(mode) { sessionManager.mode = mode }
     var showModes by remember { mutableStateOf(false) }
+    var showPhoneHeight by remember { mutableStateOf(false) }
+    var farPhoneHeight by rememberSaveable { mutableStateOf(1.45f) }
+    LaunchedEffect(farPhoneHeight) { sessionManager.farPhoneHeight = farPhoneHeight }
     var magnifierOn by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(magnifierOn) { sessionManager.magnifierEnabled = magnifierOn }
     // Off by default: depth noise on this class of phone hid grid dots on the surface itself
@@ -314,6 +317,9 @@ fun ARScreen(
 
                 val guidanceText = when {
                     !ui.isTracking -> ui.trackingMessage ?: "Let's get started — move the phone slowly"
+                    ui.mode == MeasureMode.FAR && ui.draftCount == 0 ->
+                        "Aim at the base of the building, where it meets the ground"
+                    ui.mode == MeasureMode.FAR -> "Now aim at the very top and stamp"
                     ui.surfaceCount == 0 -> "Scanning with you — sweep slowly over a table or floor"
                     ui.reticle == ReticleState.SEARCHING -> "Nothing under the crosshair — step back ~50 cm and aim at the teal dots"
                     ui.mode != MeasureMode.LINE && ui.reticle == ReticleState.ESTIMATE ->
@@ -407,6 +413,9 @@ fun ARScreen(
                 }
 
                 MeasureControls(
+                    groundDetected = ui.groundDetected,
+                    phoneHeight = ui.phoneHeight,
+                    onPhoneHeightClick = { showPhoneHeight = true },
                     mode = ui.mode,
                     result = ui.result,
                     draftCount = ui.draftCount,
@@ -415,7 +424,7 @@ fun ARScreen(
                     liveIsEstimate = ui.liveIsEstimate,
                     snapAxis = ui.snapAxis,
                     unit = unit,
-                    canAdd = ui.isTracking && ui.reticle != ReticleState.SEARCHING,
+                    canAdd = ui.isTracking && (ui.reticle != ReticleState.SEARCHING || ui.mode == MeasureMode.FAR),
                     canUndo = ui.hasPendingPoint || ui.lineCount > 0 || ui.draftCount > 0 || ui.summaries.isNotEmpty(),
                     onUndo = { sessionManager.requestAction(MeasureAction.Undo) },
                     onAdd = { pressedAt -> sessionManager.requestAction(MeasureAction.AddPoint(pressedAt)) },
@@ -463,6 +472,15 @@ fun ARScreen(
                     exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))
                 ) {
                     BrandedLoader(status = "Starting the camera")
+                }
+
+                if (showPhoneHeight) {
+                    PhoneHeightDialog(
+                        height = farPhoneHeight,
+                        unit = unit,
+                        onChange = { farPhoneHeight = it },
+                        onDismiss = { showPhoneHeight = false }
+                    )
                 }
 
                 ModePickerSheet(
@@ -691,6 +709,9 @@ private fun UnitToggle(unit: MeasureUnit, onUnitChange: (MeasureUnit) -> Unit, m
  */
 @Composable
 private fun MeasureControls(
+    groundDetected: Boolean,
+    phoneHeight: Float,
+    onPhoneHeightClick: () -> Unit,
     mode: MeasureMode,
     result: ShapeResultUi?,
     draftCount: Int,
@@ -733,6 +754,10 @@ private fun MeasureControls(
                 color = Color.White
             )
         } else {
+            if (mode == MeasureMode.FAR) {
+                GroundChip(groundDetected, phoneHeight, unit, onPhoneHeightClick)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             ResultCard(result = result, mode = mode, draftCount = draftCount, unit = unit)
             // Open-ended shapes (Path, Area) finish with Done
             if (mode.points == null && draftCount >= mode.minPoints) {

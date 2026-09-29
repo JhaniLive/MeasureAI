@@ -211,6 +211,22 @@ fun ModeIllustration(mode: MeasureMode, modifier: Modifier = Modifier, compact: 
                 line(p(0.4f, 0.15f), p(0.6f, 0.15f))
                 dots(0.5f to 0.85f, 0.5f to 0.15f)
             }
+            MeasureMode.FAR -> {
+                // Distant building; sight lines from the phone to its base and top
+                line(p(0.05f, 0.88f), p(0.95f, 0.88f), color = floor)
+                val (l, t, r) = Triple(0.62f, 0.12f, 0.88f)
+                poly(listOf(p(l, 0.88f), p(l, t), p(r, t), p(r, 0.88f)))
+                listOf(0.26f, 0.42f, 0.58f, 0.74f).forEach { y ->
+                    line(p(0.69f, y), p(0.72f, y), color = HudTeal.copy(alpha = 0.7f))
+                    line(p(0.78f, y), p(0.81f, y), color = HudTeal.copy(alpha = 0.7f))
+                }
+                val eye = p(0.14f, 0.62f)
+                drawRoundRect(HudTeal, Offset(eye.x - w * 0.035f, eye.y - h * 0.07f), Size(w * 0.07f, h * 0.14f),
+                    androidx.compose.ui.geometry.CornerRadius(stroke), style = Stroke(stroke))
+                line(eye, p(l, 0.88f), dashed = true)
+                line(eye, p(l, t), dashed = true)
+                dots(l to 0.88f, l to t)
+            }
             MeasureMode.DISTANCE -> {
                 drawRoundRect(HudTeal, p(0.1f, 0.35f), Size(w * 0.14f, h * 0.36f), androidx.compose.ui.geometry.CornerRadius(stroke * 1.5f), style = Stroke(stroke))
                 line(p(0.26f, 0.53f), p(0.82f, 0.53f), dashed = true)
@@ -302,4 +318,78 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
             }
         }
     }
+}
+
+/**
+ * Far mode: whether the ground under the phone was found (heights and distances are then
+ * measured from it), or the phone height the user set, tap to change.
+ */
+@Composable
+fun GroundChip(detected: Boolean, phoneHeight: Float, unit: MeasureUnit, onClick: () -> Unit) {
+    val text = if (detected) {
+        "✓ Ground found · phone ${com.jhani.measurear.measurement.formatLength(phoneHeight, unit)} up"
+    } else {
+        "Phone height ${com.jhani.measurear.measurement.formatLength(phoneHeight, unit)} · tap to set"
+    }
+    Text(
+        text,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, if (detected) HudTeal else HudAmber, RoundedCornerShape(16.dp))
+            .clickable(enabled = !detected, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        color = if (detected) HudTeal else HudAmber,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+/** Sets how high the phone is held above the ground (Far mode, when no ground is detected). */
+@Composable
+fun PhoneHeightDialog(height: Float, unit: MeasureUnit, onChange: (Float) -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF0E1614),
+        title = { Text("Phone height", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Text(
+                    "How high you're holding the phone above the ground. About 10 cm below your eye " +
+                        "height works well. Or point at the ground nearby so the app can measure it.",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    com.jhani.measurear.measurement.formatLength(height, unit),
+                    color = HudTeal,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                androidx.compose.material3.Slider(
+                    value = height,
+                    onValueChange = { onChange((it * 100).toInt() / 100f) },
+                    valueRange = 0.5f..2.2f,
+                    colors = androidx.compose.material3.SliderDefaults.colors(
+                        thumbColor = HudTeal,
+                        activeTrackColor = HudTeal
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Text(
+                "Done",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HudTeal)
+                    .clickable(onClick = onDismiss)
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                color = Color.Black,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    )
 }

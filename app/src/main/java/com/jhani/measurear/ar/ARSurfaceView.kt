@@ -65,6 +65,9 @@ class ARSurfaceView(
     private val depthTexture = DepthTexture()
     private val pointCloudRenderer = PointCloudRenderer()
 
+    /** Camera pose of the current frame (GL thread). */
+    private var lastCameraPose: Pose? = null
+
     /** Diagnostic logcat output (stamp decisions, perf) only in debuggable builds. */
     private val diagnostics =
         (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -289,6 +292,7 @@ class ARSurfaceView(
                 return
             }
 
+            lastCameraPose = camera.pose
             camera.getProjectionMatrix(projectionMatrix, 0, NEAR_PLANE, FAR_PLANE)
             camera.getViewMatrix(viewMatrix, 0)
 
@@ -1221,7 +1225,33 @@ class ARSurfaceView(
      * vertical through the base closest to the line of sight.
      */
     private fun isVerticalStep(mode: MeasureMode, index: Int) =
-        (mode == MeasureMode.HEIGHT && index == 1) || (mode == MeasureMode.VOLUME && index == 3)
+        (mode == MeasureMode.HEIGHT && index == 1) || (mode == MeasureMode.VOLUME && index == 3) ||
+            (mode == MeasureMode.FAR && index == 2)
+
+    /**
+     * Height of the ground under the phone: the lowest detected level surface at least
+     * 40 cm below the camera, or (not detected) the camera height minus the phone height
+     * the user set. Returns the ground height and whether it was detected.
+     */
+    private fun groundLevel(cameraPose: Pose): Pair<Float, Boolean> {
+        val planes = sessionManager.session?.getAllTrackables(Plane::class.java).orEmpty()
+        val floor = planes
+            .filter {
+                it.trackingState == TrackingState.TRACKING && it.subsumedBy == null &&
+                    it.type == Plane.Type.HORIZONTAL_UPWARD_FACING && it.centerPose.ty() < cameraPose.ty() - 0.4f
+            }
+            .minByOrNull { it.centerPose.ty() }
+        return if (floor != null) floor.centerPose.ty() to true else (cameraPose.ty() - sessionManager.farPhoneHeight) to false
+    }
+
+    /** Far mode base: where the line of sight (crosshair, or through the tap) meets the ground. */
+    private fun farBase(tap: FloatArray?): Pair<Vec3, Boolean>? {
+        val cameraPose = lastCameraPose ?: return null
+        val ray = (if (tap != null) rayThrough(tap[0], tap[1]) else centerRay()) ?: return null
+        val (groundY, detected) = groundLevel(cameraPose)
+        val base = Geometry.rayHitsGround(ray[0].toVec(), ray[1].toVec(), groundY) ?: return null
+        return base to detected
+    }
 
     /** Where the next point of the current shape would go, and whether it is reliable. */
     private fun nextShapePoint(target: ReticleTarget?, tap: FloatArray? = null): Pair<Vec3, Boolean>? {
@@ -1235,6 +1265,7 @@ class ARSurfaceView(
             val top = Geometry.verticalFromBase(base.anchor.pose.toVec(), ray[0].toVec(), ray[1].toVec()) ?: return null
             return top to base.onSurface
         }
+        if (mode == MeasureMode.FAR) return farBase(tap)
         target ?: return null
         return target.pose.toVec() to target.onSurface
     }
@@ -1277,7 +1308,7 @@ class ARSurfaceView(
             return
         }
 
-        val plane = if (vertical) null else target?.plane
+        val plane = if (vertical || mode == MeasureMode.FAR) null else target?.plane
         val anchor = plane?.createAnchor(point.toPose()) ?: session.createAnchor(point.toPose())
         if (draft.isEmpty()) {
             sessionManager.draftMode = mode
@@ -1285,7 +1316,7 @@ class ARSurfaceView(
             sessionManager.draftNormal = plane?.normal()
         }
         draft.add(PlacedPoint(anchor, onSurface, draggable = !vertical && mode != MeasureMode.DISTANCE))
-        if (mode == MeasureMode.DISTANCE) {
+        if (mode == MeasureMode.DISTANCE || (mode == MeasureMode.FAR && draft.size == 1)) {
             // Keep where the user stood, so the distance stays fixed after they move
             draft.add(PlacedPoint(session.createAnchor(frame.camera.pose), onSurface = true, draggable = false))
         }
@@ -1294,6 +1325,8 @@ class ARSurfaceView(
         val needed = if (mode == MeasureMode.DISTANCE) 2 else mode.points
         if (needed != null && draft.size >= needed) {
             finishShape()
+        } else if (mode == MeasureMode.FAR) {
+            sessionManager.showHint("Base marked — now aim at the very top")
         } else if (!onSurface) {
             sessionManager.showHint("Approximate point (≈) — on the teal dots it's exact")
         }
@@ -1327,8 +1360,17 @@ class ARSurfaceView(
         MeasurementSummary(value, isArea = kind == ValueKind.AREA, isEstimate = isEstimate, kind = kind, label = label)
 
     /** Distance mode stores [point, camera]; every other mode is just its points. */
-    private fun shapeResult(mode: MeasureMode, pts: List<Vec3>, normal: Vec3?, camera: Vec3? = null): ShapeResult? =
-        if (mode == MeasureMode.DISTANCE) {
+    private fun shapeResult(
+        mode: MeasureMode,
+        pts: List<Vec3>,
+        normal: Vec3?,
+        camera: Vec3? = null,
+        estimate: Boolean = false
+    ): ShapeResult? =
+        if (mode == MeasureMode.FAR) {
+            // A typed-in phone height is known to ~15 cm; a detected ground to ~2 cm
+            ShapeMath.compute(mode, pts, normal, camera, phoneHeightError = if (estimate) 0.15f else 0.02f)
+        } else if (mode == MeasureMode.DISTANCE) {
             val cam = pts.getOrNull(1) ?: camera
             if (cam == null) null else ShapeMath.compute(mode, pts.take(1), normal, cam)
         } else {
@@ -1369,7 +1411,7 @@ class ARSurfaceView(
         }
 
         for (shape in sessionManager.shapes) {
-            val r = shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal) ?: continue
+            val r = shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal, estimate = shape.isEstimate) ?: continue
             r.values.firstOrNull()?.let { summaries.add(it.toSummary(shape.isEstimate)) }
             if (shape.points.any { it.anchor.trackingState != TrackingState.TRACKING }) continue
             draw(r, shape.isEstimate, live = false)
@@ -1386,14 +1428,18 @@ class ARSurfaceView(
             val normal = if (draft.isEmpty()) reticle?.plane?.normal() else sessionManager.draftNormal
             val r = if (mode == MeasureMode.DISTANCE) {
                 shapeResult(mode, listOfNotNull(next?.first), normal, cameraPose.toVec())
+            } else if (mode == MeasureMode.FAR) {
+                // Before the base is placed: preview the base with the camera where it is now
+                val placedPts = placed.map { it.anchor.pose.toVec() }
+                shapeResult(mode, placedPts + listOfNotNull(next?.first), normal, cameraPose.toVec(), estimate)
             } else {
                 shapeResult(mode, placed.map { it.anchor.pose.toVec() } + listOfNotNull(next?.first), normal)
             }
-            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE)) {
+            if (r != null && (draft.isNotEmpty() || mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR)) {
                 draw(r, estimate, live = true)
             }
             // While a shape is being placed, the card shows only that shape (never the last one)
-            if (draft.isNotEmpty() || (mode == MeasureMode.DISTANCE && r != null)) {
+            if (draft.isNotEmpty() || ((mode == MeasureMode.DISTANCE || mode == MeasureMode.FAR) && r != null)) {
                 result = ShapeResultUi(mode, r?.values.orEmpty(), estimate, isLive = true)
             }
         }
@@ -1484,6 +1530,7 @@ class ARSurfaceView(
         }
 
         val shapeUi = publishShapes(reticle, cameraPose, segments)
+        val ground = groundLevel(cameraPose)
 
         sessionManager.publishUiState(
             MeasureUiState(
@@ -1491,6 +1538,8 @@ class ARSurfaceView(
                 isTracking = true,
                 mode = sessionManager.mode,
                 draftCount = sessionManager.draft.size,
+                groundDetected = ground.second,
+                phoneHeight = cameraPose.ty() - ground.first,
                 fills = shapeUi.fills,
                 sceneLabels = shapeUi.labels,
                 result = shapeUi.result,

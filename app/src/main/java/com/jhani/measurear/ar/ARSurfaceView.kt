@@ -65,6 +65,10 @@ class ARSurfaceView(
     private val depthTexture = DepthTexture()
     private val pointCloudRenderer = PointCloudRenderer()
 
+    /** Diagnostic logcat output (stamp decisions, perf) only in debuggable builds. */
+    private val diagnostics =
+        (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     /** Detected surfaces this frame (GL thread). */
     private var surfaceCount = 0
 
@@ -248,7 +252,7 @@ class ARSurfaceView(
             fps, perfMaxGap / 1e6, ms(0), ms(1), ms(2), ms(3), ms(4), ms(5), planes.size,
             planes.joinToString { "%s %.2fx%.2f".format(it.type.name.take(5), it.extentX, it.extentZ) }
         )
-        Log.i("Perf", line)
+        if (diagnostics) Log.i("Perf", line)
         debugStats = buildString {
             appendLine("FPS  %.0f   (worst gap %.0f ms)".format(fps, perfMaxGap / 1e6))
             appendLine("Frame %.1f ms: update %.1f · aim %.1f · grid %.1f".format(ms(5), ms(0), ms(1), ms(2)))
@@ -1009,7 +1013,7 @@ class ARSurfaceView(
     }
 
     private fun addPoint(session: Session, frame: Frame, reticle: ReticleTarget?, fromTap: Boolean = false) {
-        Log.i(
+        if (diagnostics) Log.i(
             "Stamp",
             "${if (fromTap) "tap" else "stamp"} target=${reticle?.state} onSurface=${reticle?.onSurface} " +
                 "axis=${reticle?.axis} replaceStart=${reticle?.replaceStart != null} " +
@@ -1238,7 +1242,7 @@ class ARSurfaceView(
     ) {
         val mode = sessionManager.mode
         val draft = sessionManager.draft
-        Log.i(
+        if (diagnostics) Log.i(
             "Stamp",
             "shape $mode #${draft.size} ${if (fromTap) "tap" else "stamp"} target=${target?.state} " +
                 "onSurface=${target?.onSurface} surfaces=$surfaceCount"

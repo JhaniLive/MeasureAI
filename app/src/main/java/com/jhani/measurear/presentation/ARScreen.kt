@@ -298,7 +298,8 @@ fun ARScreen(
                 val guidanceText = when {
                     !ui.isTracking -> ui.trackingMessage ?: "Let's get started — move the phone slowly"
                     ui.surfaceCount == 0 -> "Scanning with you — sweep slowly over a table or floor"
-                    ui.reticle == ReticleState.SEARCHING -> "Almost there — aim at the teal dots"
+                    ui.reticle == ReticleState.SEARCHING -> "Nothing under the crosshair — step back ~50 cm and aim at the teal dots"
+                    (ui.targetMeters ?: 1f) < 0.2f -> "Too close — step back about 50 cm"
                     ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
                     ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
                     ui.reticle == ReticleState.ESTIMATE && !ui.reticleReliable ->

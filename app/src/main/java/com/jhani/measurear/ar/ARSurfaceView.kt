@@ -1084,7 +1084,7 @@ class ARSurfaceView(
     private fun trackingMessage(reason: TrackingFailureReason): String = when (reason) {
         TrackingFailureReason.INSUFFICIENT_LIGHT -> "Too dark — move to a well-lit area"
         TrackingFailureReason.EXCESSIVE_MOTION -> "Moving too fast — slow down"
-        TrackingFailureReason.INSUFFICIENT_FEATURES -> "Can't find anything — aim at a surface with more texture or color"
+        TrackingFailureReason.INSUFFICIENT_FEATURES -> "Too close or too plain — step back about 50 cm so I can see the table"
         TrackingFailureReason.CAMERA_UNAVAILABLE -> "Another app is using the camera"
         TrackingFailureReason.BAD_STATE -> "Tracking lost — please restart the app"
         else -> "Move phone slowly to get started"

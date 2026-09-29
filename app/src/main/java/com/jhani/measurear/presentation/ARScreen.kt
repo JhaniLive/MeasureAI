@@ -471,35 +471,25 @@ fun ARScreen(
             }
 
             is ARSessionState.PermissionRequired -> {
-                StateCard(
-                    title = "Camera Permission Required",
-                    description = "MeasureAR needs camera access to detect physical surfaces and calculate real-world dimensions.",
-                    buttonText = "Grant Camera Permission"
+                BrandStateScreen(
+                    title = "Let's use your camera",
+                    description = "MeasureAR sees surfaces through the camera to measure them. Nothing is recorded or uploaded — measurements stay on this phone.",
+                    buttonText = "Allow camera"
                 ) {
                     permissionLauncher.launch(Manifest.permission.CAMERA)
                 }
             }
 
             is ARSessionState.CheckingAvailability, is ARSessionState.InstallingArcore -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (state is ARSessionState.InstallingArcore) "Setting up Google ARCore..." else "Initializing AR engine...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                }
+                BrandedLoader(
+                    status = if (state is ARSessionState.InstallingArcore) "Setting up Google Play Services for AR"
+                    else "Starting the camera"
+                )
             }
 
             is ARSessionState.UnsupportedDevice -> {
-                StateCard(
-                    title = "AR Unsupported",
+                BrandStateScreen(
+                    title = "This phone can't run AR",
                     description = state.message,
                     buttonText = null,
                     onButtonClick = {}
@@ -507,10 +497,10 @@ fun ARScreen(
             }
 
             is ARSessionState.Error -> {
-                StateCard(
-                    title = "AR Initialization Error",
+                BrandStateScreen(
+                    title = "Something went wrong",
                     description = state.message,
-                    buttonText = "Retry"
+                    buttonText = "Try again"
                 ) {
                     if (activity != null) {
                         sessionManager.onResume(activity)
@@ -1002,48 +992,3 @@ private fun SavedToast(onShare: () -> Unit, onOpenHistory: () -> Unit, modifier:
     }
 }
 
-@Composable
-private fun StateCard(
-    title: String,
-    description: String,
-    buttonText: String?,
-    onButtonClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            tonalElevation = 6.dp,
-            color = MaterialTheme.colorScheme.surfaceContainer
-        ) {
-            Column(
-                modifier = Modifier.padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                if (buttonText != null) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = onButtonClick) {
-                        Text(text = buttonText)
-                    }
-                }
-            }
-        }
-    }
-}

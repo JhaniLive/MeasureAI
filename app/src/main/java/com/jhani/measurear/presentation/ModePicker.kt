@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -104,6 +106,8 @@ fun ModePickerSheet(
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                     .background(SheetColor)
                     .clickable(remember { MutableInteractionSource() }, indication = null) {}
+                    .heightIn(max = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.88f)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
@@ -187,7 +191,7 @@ private fun ModeCard(mode: MeasureMode, selected: Boolean, onClick: () -> Unit, 
             .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ModeIllustration(mode, Modifier.fillMaxWidth().aspectRatio(1.35f))
+        ModeIllustration(mode, Modifier.fillMaxWidth().aspectRatio(1.6f))
         Spacer(Modifier.height(6.dp))
         Text(mode.title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Text(
@@ -197,7 +201,7 @@ private fun ModeCard(mode: MeasureMode, selected: Boolean, onClick: () -> Unit, 
             lineHeight = 12.sp,
             textAlign = TextAlign.Center,
             maxLines = 3,
-            modifier = Modifier.height(36.dp)
+            modifier = Modifier.height(34.dp)
         )
     }
 }

@@ -1,5 +1,6 @@
 package com.jhani.measurear.presentation
 
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.app.Activity
 import android.content.ClipData
@@ -136,6 +137,8 @@ fun ARScreen(
         }
     }
     var showPhoneHeight by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
+    val language = remember { AppLanguage.saved(context) }
     // Will it fit?: chosen box size, and the size picker
     var fitSpec by remember { mutableStateOf(com.jhani.measurear.measurement.BoxSpec.PRESETS[0]) }
     LaunchedEffect(fitSpec) { sessionManager.fitSpec = fitSpec }
@@ -243,12 +246,12 @@ fun ARScreen(
             delay(100)
             val items = ui.summaries
             if (items.isEmpty()) {
-                hint = "Measure something first, then save"
+                hint = context.getString(R.string.hint_measure_first)
                 return@launch
             }
             val bitmap = HistoryStore.captureScreen(host, cameraView)
-            if (bitmap == null) hint = "Saved without a photo (screen capture failed)"
-            lastCapture = HistoryStore.add(context, "Snapshot · ${items.size} measurements", items, bitmap)
+            if (bitmap == null) hint = context.getString(R.string.hint_saved_no_photo)
+            lastCapture = HistoryStore.add(context, context.getString(R.string.snapshot_name, items.size), items, bitmap)
         }
     }
 
@@ -348,25 +351,25 @@ fun ARScreen(
                 }
 
                 val guidanceText = when {
-                    !ui.isTracking -> ui.trackingMessage ?: "Let's get started — move the phone slowly"
+                    !ui.isTracking -> ui.trackingMessage ?: context.getString(R.string.guide_start)
                     ui.mode == MeasureMode.FAR && ui.draftCount == 0 ->
-                        "Aim at the base of the building, where it meets the ground"
-                    ui.mode == MeasureMode.FAR -> "Now aim at the very top and stamp"
-                    ui.surfaceCount == 0 -> "Scanning with you — sweep slowly over a table or floor"
-                    ui.reticle == ReticleState.SEARCHING -> "Nothing under the crosshair — step back ~50 cm and aim at the teal dots"
+                        context.getString(R.string.guide_far_base)
+                    ui.mode == MeasureMode.FAR -> context.getString(R.string.guide_far_top)
+                    ui.surfaceCount == 0 -> context.getString(R.string.guide_scanning)
+                    ui.reticle == ReticleState.SEARCHING -> context.getString(R.string.guide_nothing)
                     ui.mode != MeasureMode.LINE && ui.reticle == ReticleState.ESTIMATE ->
-                        "Approximate here (≈) — on the teal dots it's exact"
-                    ui.mode != MeasureMode.LINE -> ui.mode.howTo
-                    (ui.targetMeters ?: 1f) < 0.2f -> "Too close — step back about 50 cm"
+                        context.getString(R.string.guide_approx)
+                    ui.mode != MeasureMode.LINE -> context.modeHowTo(ui.mode)
+                    (ui.targetMeters ?: 1f) < 0.2f -> context.getString(R.string.guide_too_close)
                     ui.snapAxis == SnapAxis.VERTICAL && ui.pendingIsTop ->
-                        "Locked vertical — stamp exactly where it meets the table"
-                    ui.snapAxis == SnapAxis.VERTICAL -> "Locked vertical — stamp the top point"
-                    ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> "Edge — aim slightly inside the object"
+                        context.getString(R.string.guide_vertical_base)
+                    ui.snapAxis == SnapAxis.VERTICAL -> context.getString(R.string.guide_vertical_top)
+                    ui.reticle == ReticleState.ESTIMATE && ui.reticleAmbiguous -> context.getString(R.string.guide_edge)
                     ui.reticle == ReticleState.ESTIMATE && !ui.reticleReliable ->
-                        "Approximate here (≈) — on the teal dots it's exact"
-                    ui.hasPendingPoint -> "Nice — now stamp or tap the end point"
-                    ui.reticle == ReticleState.SNAPPED -> "Stamp to continue from this point"
-                    else -> "Ready — stamp, or tap a spot on the teal dots"
+                        context.getString(R.string.guide_approx)
+                    ui.hasPendingPoint -> context.getString(R.string.guide_end_point)
+                    ui.reticle == ReticleState.SNAPPED -> context.getString(R.string.guide_continue)
+                    else -> context.getString(R.string.guide_ready)
                 }
 
                 // Hold each message briefly so rapid state flicker doesn't overlap cross-fades
@@ -401,7 +404,7 @@ fun ARScreen(
                     onModeClick = { showModes = true },
                     onToggleDebug = {
                         debugOn = !debugOn
-                        hint = if (debugOn) "Debug view on — feature points, surfaces, stats" else "Debug view off"
+                        hint = context.getString(if (debugOn) R.string.hint_debug_on else R.string.hint_debug_off)
                     },
                     guidance = shownGuidance,
                     targetMeters = ui.targetMeters,
@@ -415,11 +418,11 @@ fun ARScreen(
                     magnifierOn = magnifierOn,
                     onToggleMagnifier = {
                         magnifierOn = !magnifierOn
-                        hint = if (magnifierOn) "Magnifier on — hold steady to zoom" else "Magnifier off"
+                        hint = context.getString(if (magnifierOn) R.string.hint_magnifier_on else R.string.hint_magnifier_off)
                     },
                     onToggleOcclusion = {
                         gridOcclusion = !gridOcclusion
-                        hint = if (gridOcclusion) "Grid hides behind objects" else "Grid drawn over everything"
+                        hint = context.getString(if (gridOcclusion) R.string.hint_occlusion_on else R.string.hint_occlusion_off)
                     },
                     onCapture = ::capture,
                     onHistory = { showHistory = true },
@@ -457,7 +460,7 @@ fun ARScreen(
                         val area = r.area
                         if (outline != null && area != null && outline.size >= 3) {
                             planArea = area
-                            planBitmap = FloorPlanRenderer.render(outline, r.outlineNormal, unit, "${r.mode.title} plan", area)
+                            planBitmap = FloorPlanRenderer.render(outline, r.outlineNormal, unit, context.getString(R.string.plan_title, context.modeTitle(r.mode)), area, context.getString(R.string.plan_footer))
                         }
                     },
                     fitSpec = fitSpec,
@@ -487,7 +490,7 @@ fun ARScreen(
                     val summary = ui.summaries.filter { !it.isArea }.getOrNull(index)
                     if (summary != null) {
                         LineActionSheet(
-                            title = "Line ${index + 1}",
+                            title = context.getString(R.string.line_n, index + 1),
                             value = formatDistance(summary.value, summary.isEstimate, unit),
                             horizontal = formatLength(summary.horizontal, unit),
                             vertical = formatLength(summary.vertical, unit),
@@ -503,7 +506,7 @@ fun ARScreen(
                                 clipboard.setPrimaryClip(
                                     ClipData.newPlainText("Measurement", formatLength(summary.value, unit))
                                 )
-                                hint = "Copied ${formatLength(summary.value, unit)}"
+                                hint = context.getString(R.string.hint_copied, formatLength(summary.value, unit))
                                 selectedLine = null
                             },
                             onDelete = {
@@ -521,7 +524,7 @@ fun ARScreen(
                     enter = androidx.compose.animation.EnterTransition.None,
                     exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))
                 ) {
-                    BrandedLoader(status = "Starting the camera")
+                    BrandedLoader(status = context.getString(R.string.loader_starting))
                 }
 
                 materialsFor?.let { area ->
@@ -530,12 +533,12 @@ fun ARScreen(
                 planBitmap?.let { bmp ->
                     fun save(then: (HistoryRecord) -> Unit) = scope.launch {
                         val summary = com.jhani.measurear.measurement.MeasurementSummary(planArea, isArea = true, isEstimate = false, label = "Floor plan")
-                        val record = HistoryStore.add(context, "Floor plan · ${formatArea(planArea, false, unit)}", listOf(summary), bmp)
+                        val record = HistoryStore.add(context, context.getString(R.string.plan_record_name, formatArea(planArea, false, unit)), listOf(summary), bmp)
                         then(record)
                     }
                     FloorPlanDialog(
                         plan = bmp,
-                        onSave = { save { hint = "Floor plan saved to History"; planBitmap = null } },
+                        onSave = { save { hint = context.getString(R.string.hint_plan_saved); planBitmap = null } },
                         onShare = { save { HistoryStore.share(context, it, unit); planBitmap = null } },
                         onDismiss = { planBitmap = null }
                     )
@@ -550,7 +553,7 @@ fun ARScreen(
                             showHang = false
                             sessionManager.hangSpec = it
                             sessionManager.requestAction(MeasureAction.UpdateHang)
-                            hint = "Tap a detected wall where the middle of the frames should be"
+                            hint = context.getString(R.string.hint_tap_wall)
                         },
                         onDismiss = { showHang = false }
                     )
@@ -566,9 +569,24 @@ fun ARScreen(
                             // Also resize a box that's already placed
                             sessionManager.fitSpec = it
                             sessionManager.requestAction(MeasureAction.ResizeBox)
-                            hint = "Tap the teal floor to place the ${it.name.lowercase()}"
+                            hint = context.getString(R.string.hint_place_box, context.boxName(it))
                         },
                         onDismiss = { showFitSize = false }
+                    )
+                }
+
+                if (showLanguage) {
+                    LanguageDialog(
+                        current = language,
+                        onPick = { picked ->
+                            showLanguage = false
+                            if (picked != language) {
+                                AppLanguage.save(context, picked)
+                                // Re-create so every screen, hint and layout direction follow
+                                activity?.recreate()
+                            }
+                        },
+                        onDismiss = { showLanguage = false }
                     )
                 }
 
@@ -590,7 +608,7 @@ fun ARScreen(
                             scale = factor
                             calibrationSample = null
                             mode = modeBeforeCalibration
-                            hint = "Calibrated — readings corrected by ${"%+.1f".format((factor - 1f) * 100)}%"
+                            hint = context.getString(R.string.hint_calibrated, "%+.1f%%".format((factor - 1f) * 100))
                         },
                         onRetry = { calibrationSample = null },
                         onDismiss = {
@@ -604,16 +622,21 @@ fun ARScreen(
                     visible = showModes,
                     current = mode,
                     scale = scale,
+                    language = language,
+                    onLanguage = {
+                        showModes = false
+                        showLanguage = true
+                    },
                     onCalibrate = {
                         if (mode != MeasureMode.CALIBRATE) modeBeforeCalibration = mode
                         mode = MeasureMode.CALIBRATE
                         showModes = false
-                        hint = MeasureMode.CALIBRATE.howTo
+                        hint = context.modeHowTo(MeasureMode.CALIBRATE)
                     },
                     onSelect = {
                         mode = it
                         showModes = false
-                        hint = "${it.title} — ${it.howTo}"
+                        hint = context.getString(R.string.mode_hint, context.modeTitle(it), context.modeHowTo(it))
                     },
                     onDismiss = { showModes = false }
                 )
@@ -631,9 +654,9 @@ fun ARScreen(
 
             is ARSessionState.PermissionRequired -> {
                 BrandStateScreen(
-                    title = "Let's use your camera",
-                    description = "MeasureAR sees surfaces through the camera to measure them. Nothing is recorded or uploaded — measurements stay on this phone.",
-                    buttonText = "Allow camera"
+                    title = context.getString(R.string.perm_title),
+                    description = context.getString(R.string.perm_desc),
+                    buttonText = context.getString(R.string.perm_button)
                 ) {
                     permissionLauncher.launch(Manifest.permission.CAMERA)
                 }
@@ -641,14 +664,14 @@ fun ARScreen(
 
             is ARSessionState.CheckingAvailability, is ARSessionState.InstallingArcore -> {
                 BrandedLoader(
-                    status = if (state is ARSessionState.InstallingArcore) "Setting up Google Play Services for AR"
-                    else "Starting the camera"
+                    status = if (state is ARSessionState.InstallingArcore) context.getString(R.string.loader_installing)
+                    else context.getString(R.string.loader_starting)
                 )
             }
 
             is ARSessionState.UnsupportedDevice -> {
                 BrandStateScreen(
-                    title = "This phone can't run AR",
+                    title = context.getString(R.string.state_unsupported_title),
                     description = state.message,
                     buttonText = null,
                     onButtonClick = {}
@@ -657,9 +680,9 @@ fun ARScreen(
 
             is ARSessionState.Error -> {
                 BrandStateScreen(
-                    title = "Something went wrong",
+                    title = context.getString(R.string.state_error_title),
                     description = state.message,
-                    buttonText = "Try again"
+                    buttonText = context.getString(R.string.try_again)
                 ) {
                     if (activity != null) {
                         sessionManager.onResume(activity)
@@ -667,7 +690,7 @@ fun ARScreen(
                 }
             }
 
-            ARSessionState.Idle -> BrandedLoader(status = "Starting the camera")
+            ARSessionState.Idle -> BrandedLoader(status = context.getString(R.string.loader_starting))
         }
     }
 }
@@ -729,7 +752,7 @@ private fun HudTopBar(
             Spacer(modifier = Modifier.width(12.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "TARGET DIST",
+                    text = stringResource(R.string.target_dist),
                     style = MaterialTheme.typography.labelSmall,
                     letterSpacing = 1.sp,
                     color = Color.White.copy(alpha = 0.7f)
@@ -755,26 +778,26 @@ private fun HudTopBar(
             if (hasFlash) {
                 TopIconButton(
                     icon = if (torchOn) R.drawable.ic_flash_on else R.drawable.ic_flash_off,
-                    description = if (torchOn) "Turn flashlight off" else "Turn flashlight on",
+                    description = stringResource(if (torchOn) R.string.cd_flash_off else R.string.cd_flash_on),
                     active = torchOn,
                     onClick = onToggleTorch
                 )
             }
             TopIconButton(
                 icon = R.drawable.ic_grid,
-                description = if (showGrid) "Hide surface grid" else "Show surface grid",
+                description = stringResource(if (showGrid) R.string.cd_grid_hide else R.string.cd_grid_show),
                 active = showGrid,
                 onClick = onToggleGrid,
                 onLongClick = onToggleOcclusion
             )
             TopIconButton(
                 icon = R.drawable.ic_zoom,
-                description = if (magnifierOn) "Turn magnifier off" else "Turn magnifier on",
+                description = stringResource(if (magnifierOn) R.string.cd_magnifier_off else R.string.cd_magnifier_on),
                 active = magnifierOn,
                 onClick = onToggleMagnifier
             )
-            TopIconButton(R.drawable.ic_camera, "Save screenshot", onClick = onCapture)
-            TopIconButton(R.drawable.ic_history, "Saved measurements", onClick = onHistory)
+            TopIconButton(R.drawable.ic_camera, stringResource(R.string.cd_save_screenshot), onClick = onCapture)
+            TopIconButton(R.drawable.ic_history, stringResource(R.string.saved_measurements), onClick = onHistory)
             Spacer(modifier = Modifier.width(4.dp))
             UnitToggle(unit = unit, onUnitChange = onUnitChange)
         }
@@ -914,7 +937,7 @@ private fun MeasureControls(
             if (mode.points == null && draftCount >= mode.minPoints) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "✓  Done",
+                    text = "✓  " + stringResource(R.string.done),
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(HudTeal)
@@ -933,11 +956,11 @@ private fun MeasureControls(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                HudIconButton(R.drawable.ic_undo, "Undo", enabled = canUndo, onClick = onUndo)
+                HudIconButton(R.drawable.ic_undo, stringResource(R.string.undo), enabled = canUndo, onClick = onUndo)
             }
             StampButton(enabled = canAdd, onClick = onAdd)
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                HudIconButton(R.drawable.ic_delete_sweep, "Clear", enabled = canUndo, onClick = onClear)
+                HudIconButton(R.drawable.ic_delete_sweep, stringResource(R.string.clear), enabled = canUndo, onClick = onClear)
             }
         }
         Spacer(modifier = Modifier.height(14.dp))
@@ -994,9 +1017,9 @@ fun ToolTabs(selected: Tool, onSelect: (Tool) -> Unit, modifier: Modifier = Modi
             .padding(4.dp)
     ) {
         listOf(
-            Triple(Tool.MEASURE, R.drawable.ic_straighten, "Measure"),
-            Triple(Tool.LEVEL, R.drawable.ic_level, "Level"),
-            Triple(Tool.COMPASS, R.drawable.ic_compass, "Compass")
+            Triple(Tool.MEASURE, R.drawable.ic_straighten, stringResource(R.string.tab_measure)),
+            Triple(Tool.LEVEL, R.drawable.ic_level, stringResource(R.string.tab_level)),
+            Triple(Tool.COMPASS, R.drawable.ic_compass, stringResource(R.string.tab_compass))
         ).forEach { (tool, icon, label) ->
             val isSelected = tool == selected
             Row(
@@ -1062,7 +1085,7 @@ private fun StampButton(enabled: Boolean, onClick: (pressedAtNanos: Long) -> Uni
                 color = HudTeal.copy(alpha = alpha)
             )
             Text(
-                text = "STAMP",
+                text = stringResource(R.string.stamp),
                 fontSize = 10.sp,
                 letterSpacing = 1.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -1106,25 +1129,25 @@ private fun LineActionSheet(
                     color = Color.White
                 )
             }
-            TopIconButton(R.drawable.ic_close, "Close", onClick = onDismiss)
+            TopIconButton(R.drawable.ic_close, stringResource(R.string.close), onClick = onDismiss)
         }
         Spacer(modifier = Modifier.height(12.dp))
 
         // Breakdown of the 3D length into flat and height components
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip("Horizontal", horizontal, Modifier.weight(1f))
-            StatChip("Vertical", vertical, Modifier.weight(1f))
-            StatChip("Angle", angle, Modifier.weight(0.7f))
+            StatChip(stringResource(R.string.horizontal), horizontal, Modifier.weight(1f))
+            StatChip(stringResource(R.string.vertical), vertical, Modifier.weight(1f))
+            StatChip(stringResource(R.string.label_angle), angle, Modifier.weight(0.7f))
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SheetButton(R.drawable.ic_straighten, "Make level", HudAmber, onMakeLevel, Modifier.weight(1f))
-            SheetButton(R.drawable.ic_level, "Make vertical", HudAmber, onMakeVertical, Modifier.weight(1f))
+            SheetButton(R.drawable.ic_straighten, stringResource(R.string.make_level), HudAmber, onMakeLevel, Modifier.weight(1f))
+            SheetButton(R.drawable.ic_level, stringResource(R.string.make_vertical), HudAmber, onMakeVertical, Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SheetButton(R.drawable.ic_copy, "Copy", HudTeal, onCopy, Modifier.weight(1f))
-            SheetButton(R.drawable.ic_delete, "Delete", Color(0xFFFF6B6B), onDelete, Modifier.weight(1f))
+            SheetButton(R.drawable.ic_copy, stringResource(R.string.copy), HudTeal, onCopy, Modifier.weight(1f))
+            SheetButton(R.drawable.ic_delete, stringResource(R.string.delete), Color(0xFFFF6B6B), onDelete, Modifier.weight(1f))
         }
     }
 }
@@ -1177,10 +1200,10 @@ private fun SavedToast(onShare: () -> Unit, onOpenHistory: () -> Unit, modifier:
             .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = "Saved", color = Color.White, fontWeight = FontWeight.SemiBold)
+        Text(text = stringResource(R.string.saved), color = Color.White, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.width(12.dp))
-        TextButton(onClick = onShare) { Text("Share", color = HudTeal) }
-        TextButton(onClick = onOpenHistory) { Text("History", color = HudTeal) }
+        TextButton(onClick = onShare) { Text(stringResource(R.string.share), color = HudTeal) }
+        TextButton(onClick = onOpenHistory) { Text(stringResource(R.string.history), color = HudTeal) }
     }
 }
 

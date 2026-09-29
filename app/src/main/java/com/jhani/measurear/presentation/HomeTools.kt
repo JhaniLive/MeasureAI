@@ -1,5 +1,7 @@
 package com.jhani.measurear.presentation
 
+import com.jhani.measurear.R
+import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -41,8 +43,8 @@ private val Chip = Color(0xFF16211F)
 @Composable
 fun AreaActions(onMaterials: () -> Unit, onPlan: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ActionPill("🎨  Materials", onMaterials)
-        ActionPill("🗺  Floor plan", onPlan)
+        ActionPill("🎨  " + stringResource(R.string.materials), onMaterials)
+        ActionPill("🗺  " + stringResource(R.string.label_floor_plan), onPlan)
     }
 }
 
@@ -110,6 +112,12 @@ private fun BigResult(main: String, detail: String) {
 @Composable
 fun MaterialsDialog(area: Float, unit: MeasureUnit, onDismiss: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    val paintLabel = stringResource(R.string.tab_paint)
+    val tilesLabel = stringResource(R.string.tab_tiles)
+    val flooringLabel = stringResource(R.string.tab_flooring)
+    val coatLabels = listOf(stringResource(R.string.coats_1), stringResource(R.string.coats_n, 2), stringResource(R.string.coats_n, 3))
+    val canLabel = stringResource(R.string.can_size).replace("%1\$d", "%d")
+    val boxLabel = stringResource(R.string.box_area).replace("%1\$s", "%s")
     var coats by rememberSaveable { mutableIntStateOf(2) }
     var doors by rememberSaveable { mutableIntStateOf(0) }
     var windows by rememberSaveable { mutableIntStateOf(0) }
@@ -124,23 +132,23 @@ fun MaterialsDialog(area: Float, unit: MeasureUnit, onDismiss: () -> Unit) {
         containerColor = Panel,
         title = {
             Column {
-                Text("Materials", color = Color.White, fontWeight = FontWeight.SemiBold)
-                Text("for ${formatArea(area, false, unit)}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                Text(stringResource(R.string.materials), color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.materials_for, formatArea(area, false, unit)), color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
             }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Choice(listOf(0, 1, 2), tab, { listOf("🎨 Paint", "🧱 Tiles", "🪵 Flooring")[it] }) { tab = it }
+                Choice(listOf(0, 1, 2), tab, { listOf("🎨 " + paintLabel, "🧱 " + tilesLabel, "🪵 " + flooringLabel)[it] }) { tab = it }
                 when (tab) {
                     0 -> {
-                        Choice(listOf(1, 2, 3), coats, { "$it coat${if (it > 1) "s" else ""}" }) { coats = it }
-                        Stepper("Doors", doors) { doors = it }
-                        Stepper("Windows", windows) { windows = it }
-                        Choice(listOf(1f, 4f, 10f, 20f), can, { "${it.toInt()} L can" }) { can = it }
+                        Choice(listOf(1, 2, 3), coats, { coatLabels[it - 1] }) { coats = it }
+                        Stepper(stringResource(R.string.doors), doors) { doors = it }
+                        Stepper(stringResource(R.string.windows), windows) { windows = it }
+                        Choice(listOf(1f, 4f, 10f, 20f), can, { canLabel.format(it.toInt()) }) { can = it }
                         val r = Calculators.paint(area, coats, doors = doors, windows = windows, canLiters = can)
                         BigResult(
                             "${r.cans} × ${can.toInt()} L",
-                            "%.1f L of paint for %s at ~10 m²/L per coat".format(r.liters, formatArea(r.paintedArea, false, unit))
+                            stringResource(R.string.paint_detail, "%.1f".format(r.liters), formatArea(r.paintedArea, false, unit))
                         )
                     }
                     1 -> {
@@ -148,23 +156,23 @@ fun MaterialsDialog(area: Float, unit: MeasureUnit, onDismiss: () -> Unit) {
                         Choice(listOf(5f, 10f, 15f), waste, { "+${it.toInt()}%" }) { waste = it }
                         val (tw, th) = tiles.getValue(tile)
                         val r = Calculators.tiles(area, tw, th, waste)
-                        BigResult("${r.tiles} tiles", "$tile cm, including ${waste.toInt()}% extra for cuts and breakage")
+                        BigResult(stringResource(R.string.tiles_count, r.tiles), stringResource(R.string.tiles_detail, tile, waste.toInt()))
                     }
                     else -> {
-                        Choice(listOf(1.5f, 2.0f, 2.4f, 3.0f), boxArea, { "%.1f m²/box".format(it) }) { boxArea = it }
+                        Choice(listOf(1.5f, 2.0f, 2.4f, 3.0f), boxArea, { boxLabel.format("%.1f".format(it)) }) { boxArea = it }
                         val r = Calculators.flooring(area, boxArea)
-                        BigResult("${r.boxes} boxes", "Covers %.1f m², including 8%% extra for cuts".format(r.coveredArea))
+                        BigResult(stringResource(R.string.boxes_count, r.boxes), stringResource(R.string.flooring_detail, "%.1f".format(r.coveredArea)))
                     }
                 }
                 Text(
-                    "Estimates — check coverage on the pack before buying.",
+                    stringResource(R.string.estimates_note),
                     color = Color.White.copy(alpha = 0.45f), fontSize = 11.sp
                 )
             }
         },
         confirmButton = {
             Text(
-                "Done",
+                stringResource(R.string.done),
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(HudTeal)
@@ -183,19 +191,19 @@ fun FloorPlanDialog(plan: Bitmap, onSave: () -> Unit, onShare: () -> Unit, onDis
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Panel,
-        title = { Text("Floor plan", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        title = { Text(stringResource(R.string.label_floor_plan), color = Color.White, fontWeight = FontWeight.SemiBold) },
         text = {
             Image(
                 bitmap = plan.asImageBitmap(),
-                contentDescription = "Floor plan",
+                contentDescription = stringResource(R.string.label_floor_plan),
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
             )
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionPill("Save to History", onSave)
+                ActionPill(stringResource(R.string.save_to_history), onSave)
                 Text(
-                    "Share",
+                    stringResource(R.string.share),
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(HudTeal)
@@ -208,7 +216,7 @@ fun FloorPlanDialog(plan: Bitmap, onSave: () -> Unit, onShare: () -> Unit, onDis
         },
         dismissButton = {
             Text(
-                "Close",
+                stringResource(R.string.close),
                 modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
                 color = Color.White.copy(alpha = 0.7f)
             )

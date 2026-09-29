@@ -1,5 +1,6 @@
 package com.jhani.measurear
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
@@ -13,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import com.jhani.measurear.measurement.MeasureMode
 import com.jhani.measurear.presentation.ARScreen
+import com.jhani.measurear.presentation.AppLanguage
 import com.jhani.measurear.presentation.StampKeys
 import com.jhani.measurear.ui.theme.MeasureARTheme
 
@@ -24,6 +26,11 @@ class MainActivity : ComponentActivity() {
     private fun readMode(intent: Intent?) {
         val name = intent?.getStringExtra("mode") ?: return
         requestedMode.value = MeasureMode.values().firstOrNull { it.name == name }
+    }
+
+    // Apply the in-app language choice to everything this activity shows
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -1,5 +1,7 @@
 package com.jhani.measurear.ar
 
+import com.jhani.measurear.presentation.modeTitle
+import com.jhani.measurear.R
 import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
@@ -900,7 +902,7 @@ class ARSurfaceView(
                 MeasureAction.DragEnd -> endDrag()
                 is MeasureAction.AddPointAt ->
                     if (reticle == null && frame.camera.trackingState != TrackingState.TRACKING) {
-                        sessionManager.showHint("Hold on — still finding my bearings. Move the phone slowly")
+                        sessionManager.showHint(context.getString(R.string.hint_bearings))
                     } else {
                         val target = tapTarget(frame, action.x, action.y)
                         if (sessionManager.mode == MeasureMode.LINE) addPoint(session, frame, target, fromTap = true)
@@ -939,7 +941,7 @@ class ARSurfaceView(
         val straightened = MeasuredLine(line.start, newEnd)
         lines[index] = straightened
         sessionManager.emitCompleted(
-            if (mode == StraightenMode.LEVEL) "Level line" else "Vertical line",
+            context.getString(if (mode == StraightenMode.LEVEL) R.string.level_line else R.string.vertical_line),
             lineSummary(straightened)
         )
         sessionManager.areas.removeAll { area -> area.lines.any { it === line } }
@@ -1043,8 +1045,8 @@ class ARSurfaceView(
         // it is corrected to exact geometry and never uses the top's own depth.
         if (reticle == null) {
             sessionManager.showHint(
-                if (surfaceCount == 0) "Nothing to measure on yet — sweep the phone slowly over a table or floor"
-                else "Nothing under the crosshair — aim at the object or the teal dots"
+                if (surfaceCount == 0) context.getString(R.string.hint_nothing_yet)
+                else context.getString(R.string.hint_nothing_under)
             )
             post {
                 performHapticFeedback(
@@ -1095,7 +1097,7 @@ class ARSurfaceView(
         } else {
             val line = MeasuredLine(start, endPoint)
             sessionManager.lines.add(line)
-            sessionManager.emitCompleted("Line", lineSummary(line))
+            sessionManager.emitCompleted(context.modeTitle(MeasureMode.LINE), lineSummary(line))
             sessionManager.pendingStart = null
             if (!sessionManager.pendingContinuesChain) chain.clear()
             chain.add(line)
@@ -1106,7 +1108,7 @@ class ARSurfaceView(
                 val area = MeasuredArea(chain.toList())
                 sessionManager.areas.add(area)
                 sessionManager.emitCompleted(
-                    "Area",
+                    context.getString(R.string.mode_area),
                     MeasurementSummary(
                         polygonArea(area.lines.map { it.start.anchor.pose }) * sessionManager.scale * sessionManager.scale,
                         isArea = true,
@@ -1114,13 +1116,13 @@ class ARSurfaceView(
                     )
                 )
                 chain.clear()
-                sessionManager.showHint("Shape closed — area measured")
+                sessionManager.showHint(context.getString(R.string.hint_shape_closed))
             }
         }
         if (heightTop) {
-            sessionManager.showHint("Top marked — for an exact height, stamp the teal surface right below it")
+            sessionManager.showHint(context.getString(R.string.hint_top_marked))
         } else if (reticle.ambiguous) {
-            sessionManager.showHint("Placed on an edge — depth is uncertain here. Undo and aim slightly inside if it looks off")
+            sessionManager.showHint(context.getString(R.string.hint_edge_placed))
         }
         post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
     }
@@ -1308,12 +1310,12 @@ class ARSurfaceView(
         if (mode == MeasureMode.HANG &&
             (target?.plane == null || target.plane.type != Plane.Type.VERTICAL)
         ) {
-            sessionManager.showHint("Aim at a detected wall (teal dots on the wall) to place the frames")
+            sessionManager.showHint(context.getString(R.string.hint_aim_wall))
             post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
             return
         }
         if (mode == MeasureMode.FIT && target?.onSurface != true) {
-            sessionManager.showHint("Aim at the teal floor to place the box")
+            sessionManager.showHint(context.getString(R.string.hint_aim_floor))
             post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
             return
         }
@@ -1321,8 +1323,8 @@ class ARSurfaceView(
         val tap = if (fromTap) floatArrayOf(tapX, tapY) else null
         val (point, onSurface) = nextShapePoint(if (vertical) null else target, tap) ?: run {
             sessionManager.showHint(
-                if (surfaceCount == 0) "Nothing to measure on yet — sweep the phone slowly over the floor or a wall"
-                else "Nothing under the crosshair — aim at a surface or object"
+                if (surfaceCount == 0) context.getString(R.string.hint_nothing_yet_wall)
+                else context.getString(R.string.hint_nothing_under2)
             )
             post { performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
             return
@@ -1346,9 +1348,9 @@ class ARSurfaceView(
         if (needed != null && draft.size >= needed) {
             finishShape()
         } else if (mode == MeasureMode.FAR) {
-            sessionManager.showHint("Base marked — now aim at the very top")
+            sessionManager.showHint(context.getString(R.string.hint_base_marked))
         } else if (!onSurface) {
-            sessionManager.showHint("Approximate point (≈) — on the teal dots it's exact")
+            sessionManager.showHint(context.getString(R.string.hint_approx_point))
         }
     }
 
@@ -1405,7 +1407,7 @@ class ARSurfaceView(
         val draft = sessionManager.draft
         val min = if (mode == MeasureMode.DISTANCE) 2 else mode.minPoints
         if (draft.size < min) {
-            sessionManager.showHint("${mode.title} needs at least $min points")
+            sessionManager.showHint(context.getString(R.string.hint_min_points, context.modeTitle(mode), min))
             return
         }
         if (mode == MeasureMode.CALIBRATE) {
@@ -1433,19 +1435,19 @@ class ARSurfaceView(
         draft.clear()
         sessionManager.draftMode = null
         if (mode == MeasureMode.HANG) {
-            sessionManager.showHint("Mark each ✕ on the wall — drag the middle dot to move them")
+            sessionManager.showHint(context.getString(R.string.hint_mark_nails))
             post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
             return
         }
         if (mode == MeasureMode.FIT) {
             // A placed box isn't a measurement: no History entry
-            sessionManager.showHint("Drag the box's center dot to move it; rotate with ⟲ ⟳")
+            sessionManager.showHint(context.getString(R.string.hint_drag_box))
             post { performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
             return
         }
         shapeResult(shape.mode, shape.points.map { it.anchor.pose.toVec() }, shape.normal)
             ?.values?.firstOrNull()
-            ?.let { sessionManager.emitCompleted(mode.title, it.toSummary(shape.isEstimate)) }
+            ?.let { sessionManager.emitCompleted(context.modeTitle(mode), it.toSummary(shape.isEstimate)) }
         post {
             performHapticFeedback(
                 if (android.os.Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
@@ -1722,12 +1724,12 @@ class ARSurfaceView(
     }
 
     private fun trackingMessage(reason: TrackingFailureReason): String = when (reason) {
-        TrackingFailureReason.INSUFFICIENT_LIGHT -> "Too dark — move to a well-lit area"
-        TrackingFailureReason.EXCESSIVE_MOTION -> "Moving too fast — slow down"
-        TrackingFailureReason.INSUFFICIENT_FEATURES -> "Too close or too plain — step back about 50 cm so I can see the table"
-        TrackingFailureReason.CAMERA_UNAVAILABLE -> "Another app is using the camera"
-        TrackingFailureReason.BAD_STATE -> "Tracking lost — please restart the app"
-        else -> "Move phone slowly to get started"
+        TrackingFailureReason.INSUFFICIENT_LIGHT -> context.getString(R.string.track_dark)
+        TrackingFailureReason.EXCESSIVE_MOTION -> context.getString(R.string.track_fast)
+        TrackingFailureReason.INSUFFICIENT_FEATURES -> context.getString(R.string.track_plain)
+        TrackingFailureReason.CAMERA_UNAVAILABLE -> context.getString(R.string.track_camera)
+        TrackingFailureReason.BAD_STATE -> context.getString(R.string.track_lost)
+        else -> context.getString(R.string.track_start)
     }
 
     // ---------------------------------------------------------------------------------------

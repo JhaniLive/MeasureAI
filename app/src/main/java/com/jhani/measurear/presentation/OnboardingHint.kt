@@ -1,5 +1,7 @@
 package com.jhani.measurear.presentation
 
+import com.jhani.measurear.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -74,7 +76,7 @@ fun OnboardingHint(modifier: Modifier = Modifier) {
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Point down at a table or floor from about 50 cm\nand slide the phone sideways slowly",
+            text = stringResource(R.string.onboarding),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,

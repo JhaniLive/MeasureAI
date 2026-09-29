@@ -27,7 +27,7 @@ object FloorPlanRenderer {
     private const val ACCENT = 0xFF12A594.toInt()
     private const val MUTED = 0xFF6B7F7C.toInt()
 
-    fun render(outline: List<Vec3>, normal: Vec3?, unit: MeasureUnit, title: String, area: Float): Bitmap {
+    fun render(outline: List<Vec3>, normal: Vec3?, unit: MeasureUnit, title: String, area: Float, footer: String): Bitmap {
         val bitmap = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)
         c.drawColor(0xFFFFFFFF.toInt())
@@ -102,7 +102,7 @@ object FloorPlanRenderer {
             color = INK; textSize = 46f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         })
         c.drawText(
-            DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date()) + "  ·  measured with MeasureAR",
+            DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date()) + "  ·  " + footer,
             60f, footerTop + 112f,
             Paint(Paint.ANTI_ALIAS_FLAG).apply { color = MUTED; textSize = 28f }
         )

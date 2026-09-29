@@ -1,5 +1,9 @@
 package com.jhani.measurear.presentation
 
+import com.jhani.measurear.R
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -69,7 +73,7 @@ fun ModeChip(mode: MeasureMode, onClick: () -> Unit, modifier: Modifier = Modifi
     ) {
         ModeIllustration(mode, Modifier.size(28.dp), compact = true)
         Spacer(Modifier.width(6.dp))
-        Text(mode.title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text(stringResource(mode.titleRes()), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Text("  ▾", color = HudTeal, fontSize = 12.sp)
     }
 }
@@ -83,7 +87,9 @@ fun ModePickerSheet(
     onDismiss: () -> Unit,
     /** Current calibration factor (1 = not calibrated). */
     scale: Float = 1f,
-    onCalibrate: () -> Unit = {}
+    onCalibrate: () -> Unit = {},
+    language: AppLanguage = AppLanguage.SYSTEM,
+    onLanguage: () -> Unit = {}
 ) {
     AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
         Box(
@@ -120,7 +126,7 @@ fun ModePickerSheet(
                 )
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "What do you want to measure?",
+                    stringResource(R.string.picker_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
@@ -149,10 +155,10 @@ fun ModePickerSheet(
                     Text("🎯", fontSize = 22.sp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Calibrate with a card", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(stringResource(R.string.calib_button), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                         Text(
-                            if (scale == 1f) "Measure a bank card once to make every reading more accurate"
-                            else "Calibrated: readings corrected by ${"%+.1f".format((scale - 1f) * 100)}% · tap to redo",
+                            if (scale == 1f) stringResource(R.string.calib_button_sub)
+                            else stringResource(R.string.calib_button_done, "%+.1f%%".format((scale - 1f) * 100)),
                             color = Color.White.copy(alpha = 0.6f),
                             fontSize = 11.sp
                         )
@@ -160,13 +166,34 @@ fun ModePickerSheet(
                     Text("›", color = HudTeal, fontSize = 22.sp)
                 }
                 Spacer(Modifier.height(10.dp))
+                // Language
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(CardColor)
+                        .clickable(onClick = onLanguage)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🌐", fontSize = 20.sp)
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.language), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                        modifier = Modifier.weight(1f))
+                    Text(
+                        if (language == AppLanguage.SYSTEM) stringResource(R.string.language_system) else language.nativeName,
+                        color = HudTeal, fontSize = 14.sp
+                    )
+                    Text("  ›", color = HudTeal, fontSize = 20.sp)
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     androidx.compose.ui.text.buildAnnotatedString {
-                        append("Built with ")
+                        append(stringResource(R.string.built_with))
                         pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFFF5A7A)))
                         append("♥")
                         pop()
-                        append(" by ")
+                        append(stringResource(R.string.built_by))
                         pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold))
                         append("Jhani")
                         pop()
@@ -193,9 +220,9 @@ private fun ModeCard(mode: MeasureMode, selected: Boolean, onClick: () -> Unit, 
     ) {
         ModeIllustration(mode, Modifier.fillMaxWidth().aspectRatio(1.6f))
         Spacer(Modifier.height(6.dp))
-        Text(mode.title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text(stringResource(mode.titleRes()), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Text(
-            mode.howTo,
+            stringResource(mode.howToRes()),
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 10.sp,
             lineHeight = 12.sp,
@@ -344,15 +371,15 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
     val needed = mode.points
     val step = when {
         // A finished shape: name what the big number is ("HEIGHT", "AREA")
-        draftCount == 0 && result != null && !result.isLive && result.values.isNotEmpty() -> result.values.first().label
-        draftCount == 0 -> mode.howTo
-        needed != null -> "Point ${draftCount + 1} of $needed"
+        draftCount == 0 && result != null && !result.isLive && result.values.isNotEmpty() -> LocalContext.current.resultLabel(result.values.first().label)
+        draftCount == 0 -> stringResource(mode.howToRes())
+        needed != null -> stringResource(R.string.step_point_of, draftCount + 1, needed)
         draftCount < mode.minPoints -> {
             val more = mode.minPoints - draftCount
-            "Point ${draftCount + 1} — $more more to go"
+            stringResource(R.string.step_more, draftCount + 1, more)
         }
-        mode == MeasureMode.AREA -> "$draftCount corners · tap the first corner or Done"
-        else -> "$draftCount points · tap Done to finish"
+        mode == MeasureMode.AREA -> stringResource(R.string.step_area, draftCount)
+        else -> stringResource(R.string.step_points, draftCount)
     }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -376,7 +403,7 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 values.drop(1).take(3).forEach { v ->
                     Text(
-                        "${v.label} ${formatValue(v, false, unit)}",
+                        "${LocalContext.current.resultLabel(v.label)} ${formatValue(v, false, unit)}",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.75f)
                     )
@@ -393,9 +420,9 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
 @Composable
 fun GroundChip(detected: Boolean, phoneHeight: Float, unit: MeasureUnit, onClick: () -> Unit) {
     val text = if (detected) {
-        "✓ Ground found · phone ${com.jhani.measurear.measurement.formatLength(phoneHeight, unit)} up"
+        stringResource(R.string.ground_found, com.jhani.measurear.measurement.formatLength(phoneHeight, unit))
     } else {
-        "Phone height ${com.jhani.measurear.measurement.formatLength(phoneHeight, unit)} · tap to set"
+        stringResource(R.string.phone_height_set, com.jhani.measurear.measurement.formatLength(phoneHeight, unit))
     }
     Text(
         text,
@@ -417,12 +444,11 @@ fun PhoneHeightDialog(height: Float, unit: MeasureUnit, onChange: (Float) -> Uni
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF0E1614),
-        title = { Text("Phone height", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        title = { Text(stringResource(R.string.phone_height), color = Color.White, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 Text(
-                    "How high you're holding the phone above the ground. About 10 cm below your eye " +
-                        "height works well. Or point at the ground nearby so the app can measure it.",
+                    stringResource(R.string.phone_height_help),
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 14.sp
                 )
@@ -447,7 +473,7 @@ fun PhoneHeightDialog(height: Float, unit: MeasureUnit, onChange: (Float) -> Uni
         },
         confirmButton = {
             Text(
-                "Done",
+                stringResource(R.string.done),
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(HudTeal)
@@ -481,15 +507,15 @@ fun CalibrationDialog(
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF0E1614),
-        title = { Text("Calibration", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        title = { Text(stringResource(R.string.calibration), color = Color.White, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
-                Text("What did you measure?", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Text(stringResource(R.string.calib_what), color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
                 com.jhani.measurear.measurement.Calibration.Reference.values().forEach { ref ->
                     val selected = ref == reference
                     Text(
-                        "${ref.label} · ${fmt(ref.meters)}",
+                        "${stringResource(ref.labelRes())} · ${fmt(ref.meters)}",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 3.dp)
@@ -503,14 +529,13 @@ fun CalibrationDialog(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                Text("Measured ${fmt(measuredMeters)}  ·  real ${fmt(reference.meters)}", color = Color.White, fontSize = 15.sp)
+                Text(stringResource(R.string.calib_measured, fmt(measuredMeters), fmt(reference.meters)), color = Color.White, fontSize = 15.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(
                     when {
-                        !onSurface -> "Both ends need to be on the teal dots for a reliable calibration. Try again on a detected surface."
-                        factor == null -> "That's too far off to be a scale error — a point probably missed the edge. Try again."
-                        else -> "Every measurement will be corrected by ${"%+.1f".format((factor - 1f) * 100)}% " +
-                            "for this session."
+                        !onSurface -> stringResource(R.string.calib_need_surface)
+                        factor == null -> stringResource(R.string.calib_too_far)
+                        else -> stringResource(R.string.calib_will_correct, "%+.1f%%".format((factor - 1f) * 100))
                     },
                     color = if (!onSurface || factor == null) HudAmber else HudTeal,
                     fontSize = 13.sp
@@ -520,7 +545,7 @@ fun CalibrationDialog(
         confirmButton = {
             val ok = onSurface && factor != null
             Text(
-                if (ok) "Apply" else "Try again",
+                if (ok) stringResource(R.string.apply) else stringResource(R.string.try_again),
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(HudTeal)
@@ -532,7 +557,7 @@ fun CalibrationDialog(
         },
         dismissButton = {
             Text(
-                "Cancel",
+                stringResource(R.string.cancel),
                 modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
                 color = Color.White.copy(alpha = 0.7f)
             )
@@ -581,7 +606,7 @@ fun FitControls(spec: com.jhani.measurear.measurement.BoxSpec, unit: MeasureUnit
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FitButton("⟲") { onRotate(-15f) }
         Text(
-            "${spec.name} · ${fmt(spec.width)} × ${fmt(spec.depth)} × ${fmt(spec.height)}  ▾",
+            "${LocalContext.current.boxName(spec)} · ${fmt(spec.width)} × ${fmt(spec.depth)} × ${fmt(spec.height)}  ▾",
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.Black.copy(alpha = 0.55f))
@@ -628,7 +653,7 @@ fun FitSizeDialog(
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF0E1614),
-        title = { Text("What do you want to fit?", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        title = { Text(stringResource(R.string.fit_title), color = Color.White, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 com.jhani.measurear.measurement.BoxSpec.PRESETS.chunked(2).forEach { row ->
@@ -643,7 +668,7 @@ fun FitSizeDialog(
                                     .clickable { onPick(preset) }
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
-                                Text(preset.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(LocalContext.current.boxName(preset), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 Text(
                                     "${fmt(preset.width)} × ${fmt(preset.depth)} × ${fmt(preset.height)}",
                                     color = Color.White.copy(alpha = 0.55f), fontSize = 10.sp
@@ -653,9 +678,9 @@ fun FitSizeDialog(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Text("Or your own size ($unitLabel)", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Text(stringResource(R.string.fit_own_size, unitLabel), color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(Triple("Width", w) { v: String -> w = v }, Triple("Depth", d) { v: String -> d = v }, Triple("Height", ht) { v: String -> ht = v })
+                    listOf(Triple(stringResource(R.string.label_width), w) { v: String -> w = v }, Triple(stringResource(R.string.label_depth), d) { v: String -> d = v }, Triple(stringResource(R.string.label_height), ht) { v: String -> ht = v })
                         .forEach { (label, value, set) ->
                             androidx.compose.material3.OutlinedTextField(
                                 value = value,
@@ -681,7 +706,7 @@ fun FitSizeDialog(
             val custom = listOf(w, d, ht).map { it.toFloatOrNull()?.div(toUnit) }
             val valid = custom.all { it != null && it in 0.01f..10f }
             Text(
-                "Use my size",
+                stringResource(R.string.fit_use_mine),
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(if (valid) HudTeal else HudTeal.copy(alpha = 0.3f))
@@ -693,7 +718,7 @@ fun FitSizeDialog(
         },
         dismissButton = {
             Text(
-                "Close",
+                stringResource(R.string.close),
                 modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
                 color = Color.White.copy(alpha = 0.7f)
             )
@@ -706,7 +731,7 @@ fun FitSizeDialog(
 fun HangControls(spec: com.jhani.measurear.measurement.HangSpec, unit: MeasureUnit, onEdit: () -> Unit) {
     val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
     Text(
-        "${spec.count} frame${if (spec.count > 1) "s" else ""} · ${fmt(spec.width)} × ${fmt(spec.height)} · gap ${fmt(spec.gap)}  ▾",
+        pluralStringResource(R.plurals.hang_summary, spec.count, spec.count, fmt(spec.width), fmt(spec.height), fmt(spec.gap)) + "  ▾",
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.55f))
@@ -732,18 +757,18 @@ fun HangDialog(
     val unitLabel = if (unit == MeasureUnit.METRIC) "cm" else "in"
     fun show(m: Float) = if (unit == MeasureUnit.METRIC) "%.0f".format(m * toUnit) else "%.1f".format(m * toUnit)
     var count by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(current.count) }
-    val fields = listOf("Frame width", "Frame height", "Gap between", "Hook below top")
+    val fields = listOf(stringResource(R.string.hang_frame_width), stringResource(R.string.hang_frame_height), stringResource(R.string.hang_gap), stringResource(R.string.hang_hook))
     val values = androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateListOf(show(current.width), show(current.height), show(current.gap), show(current.hookDrop))
     }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF0E1614),
-        title = { Text("Hang pictures", color = Color.White, fontWeight = FontWeight.SemiBold) },
+        title = { Text(stringResource(R.string.mode_hang), color = Color.White, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Frames", color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.hang_frames), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Text("−", color = HudTeal, fontSize = 24.sp, modifier = Modifier.clickable { count = (count - 1).coerceAtLeast(1) }.padding(horizontal = 14.dp))
                     Text("$count", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text("+", color = HudTeal, fontSize = 24.sp, modifier = Modifier.clickable { count = (count + 1).coerceAtMost(8) }.padding(horizontal = 14.dp))
@@ -773,7 +798,7 @@ fun HangDialog(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Hook below top: how far the hook or taut wire sits below the frame's top edge.",
+                    stringResource(R.string.hang_hook_help),
                     color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp
                 )
             }
@@ -782,7 +807,7 @@ fun HangDialog(
             val m = values.map { it.toFloatOrNull()?.div(toUnit) }
             val valid = m.all { it != null } && m[0]!! > 0.01f && m[1]!! > 0.01f && m[2]!! >= 0f && m[3]!! >= 0f && m[3]!! < m[1]!!
             Text(
-                "Apply",
+                stringResource(R.string.apply),
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(if (valid) HudTeal else HudTeal.copy(alpha = 0.3f))
@@ -796,7 +821,44 @@ fun HangDialog(
         },
         dismissButton = {
             Text(
-                "Cancel",
+                stringResource(R.string.cancel),
+                modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
+                color = Color.White.copy(alpha = 0.7f)
+            )
+        }
+    )
+}
+
+/** Choose the app language; each is written in its own script so it's always recognisable. */
+@Composable
+fun LanguageDialog(current: AppLanguage, onPick: (AppLanguage) -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF0E1614),
+        title = { Text(stringResource(R.string.language), color = Color.White, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                AppLanguage.values().forEach { lang ->
+                    val on = lang == current
+                    Text(
+                        if (lang == AppLanguage.SYSTEM) stringResource(R.string.language_system) else lang.nativeName,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (on) HudTealDark else CardColor)
+                            .border(1.dp, if (on) HudTeal else Color.Transparent, RoundedCornerShape(12.dp))
+                            .clickable { onPick(lang) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Text(
+                stringResource(R.string.close),
                 modifier = Modifier.clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp),
                 color = Color.White.copy(alpha = 0.7f)
             )

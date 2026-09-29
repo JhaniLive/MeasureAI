@@ -1,5 +1,7 @@
 package com.jhani.measurear.capture
 
+import com.jhani.measurear.presentation.resultLabel
+import com.jhani.measurear.R
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -313,11 +315,11 @@ object HistoryStore {
                     color = 0xFFFFFFFF.toInt(); textSize = 20f; typeface = bold
                 })
                 c.drawText(
-                    "MeasureAR report · " + java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date()),
+                    context.getString(R.string.pdf_header) + " · " + java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date()),
                     margin, 56f,
                     android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1DE9D0.toInt(); textSize = 10f }
                 )
-                c.drawText("Built with ♥ by Jhani · page $pageNo", margin, pageH - 20f, muted)
+                c.drawText(context.getString(R.string.pdf_footer, pageNo), margin, pageH - 20f, muted)
                 y = 95f
             }
 
@@ -354,7 +356,7 @@ object HistoryStore {
                         com.jhani.measurear.measurement.ResultValue(item.label ?: "", item.value, item.kind),
                         item.isEstimate, unit
                     )
-                    c.drawText("${item.label ?: if (item.isArea) "Area" else "Length"}:  $value", tx, ty, ink)
+                    c.drawText("${item.label?.let { context.resultLabel(it) } ?: context.getString(if (item.isArea) R.string.label_area else R.string.label_length)}:  $value", tx, ty, ink)
                     ty += 18f
                 }
                 c.drawLine(margin, y + blockH - 10f, pageW - margin, y + blockH - 10f,
@@ -377,11 +379,11 @@ object HistoryStore {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Share report"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_report)))
     }
 
     fun share(context: Context, record: HistoryRecord, unit: MeasureUnit) {
-        val text = "${record.name}\n${formatSummaries(record.items, unit)}"
+        val text = "${record.name}\n${formatSummaries(record.items, unit) { context.resultLabel(it) }}"
         val image = record.image
         val intent = Intent(Intent.ACTION_SEND).apply {
             putExtra(Intent.EXTRA_TEXT, text)
@@ -394,6 +396,6 @@ object HistoryStore {
                 type = "text/plain"
             }
         }
-        context.startActivity(Intent.createChooser(intent, "Share measurement"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_measurement)))
     }
 }

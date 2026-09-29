@@ -1,5 +1,7 @@
 package com.jhani.measurear.presentation
 
+import com.jhani.measurear.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -117,11 +119,11 @@ private fun buildWordmark() = androidx.compose.ui.text.buildAnnotatedString {
 fun MadeWithLove(modifier: Modifier = Modifier) {
     Text(
         androidx.compose.ui.text.buildAnnotatedString {
-            append("Built with ")
+            append(stringResource(R.string.built_with))
             pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFFF5A7A)))
             append("♥")
             pop()
-            append(" by ")
+            append(stringResource(R.string.built_by))
             pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold))
             append("Jhani")
             pop()
@@ -149,7 +151,7 @@ fun BrandedLoader(status: String) {
             Spacer(Modifier.height(20.dp))
             Wordmark()
             Spacer(Modifier.height(6.dp))
-            Text("Measure anything with your camera", fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f))
+            Text(stringResource(R.string.tagline), fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f))
             Spacer(Modifier.height(48.dp))
             Text(
                 status + ".".repeat(dots.toInt()),

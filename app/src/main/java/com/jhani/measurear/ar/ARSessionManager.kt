@@ -1,5 +1,6 @@
 package com.jhani.measurear.ar
 
+import com.jhani.measurear.R
 import android.Manifest
 import android.app.Activity
 import android.content.Context
@@ -298,7 +299,7 @@ class ARSessionManager(private val context: Context) {
             _torchOn.value = on
         } catch (e: Exception) {
             Log.w(TAG, "Torch unavailable", e)
-            showHint("Flashlight isn't available right now")
+            showHint(context.getString(R.string.flash_unavailable))
         }
     }
 
@@ -323,7 +324,7 @@ class ARSessionManager(private val context: Context) {
 
             if (!availability.isSupported) {
                 _sessionState.value = ARSessionState.UnsupportedDevice(
-                    "This device does not support Google ARCore required for 3D spatial measurement."
+                    context.getString(R.string.err_unsupported)
                 )
                 return
             }
@@ -367,22 +368,22 @@ class ARSessionManager(private val context: Context) {
                 _sessionState.value = ARSessionState.InstallingArcore
                 return
             } catch (e: UnavailableUserDeclinedInstallationException) {
-                _sessionState.value = ARSessionState.Error("ARCore installation was declined. ARCore is required to measure.")
+                _sessionState.value = ARSessionState.Error(context.getString(R.string.err_declined))
                 return
             } catch (e: UnavailableDeviceNotCompatibleException) {
-                _sessionState.value = ARSessionState.UnsupportedDevice("Device is incompatible with ARCore.")
+                _sessionState.value = ARSessionState.UnsupportedDevice(context.getString(R.string.err_incompatible))
                 return
             } catch (e: UnavailableSdkTooOldException) {
-                _sessionState.value = ARSessionState.Error("Please update this app to support your ARCore version.")
+                _sessionState.value = ARSessionState.Error(context.getString(R.string.err_app_old))
                 return
             } catch (e: UnavailableApkTooOldException) {
-                _sessionState.value = ARSessionState.Error("Please update ARCore on your device via Google Play Store.")
+                _sessionState.value = ARSessionState.Error(context.getString(R.string.err_arcore_old))
                 return
             } catch (e: SecurityException) {
                 _sessionState.value = ARSessionState.PermissionRequired
                 return
             } catch (e: Exception) {
-                _sessionState.value = ARSessionState.Error("Failed to initialize ARCore session: ${e.localizedMessage ?: "Unknown error"}")
+                _sessionState.value = ARSessionState.Error(context.getString(R.string.err_init, e.localizedMessage ?: ""))
                 return
             }
         }
@@ -392,9 +393,9 @@ class ARSessionManager(private val context: Context) {
             session?.resume()
             _sessionState.value = ARSessionState.SessionReady
         } catch (e: CameraNotAvailableException) {
-            _sessionState.value = ARSessionState.Error("Camera is currently unavailable or used by another application.")
+            _sessionState.value = ARSessionState.Error(context.getString(R.string.err_camera))
         } catch (e: Exception) {
-            _sessionState.value = ARSessionState.Error("Failed to resume AR session: ${e.localizedMessage}")
+            _sessionState.value = ARSessionState.Error(context.getString(R.string.err_resume, e.localizedMessage ?: ""))
         }
     }
 

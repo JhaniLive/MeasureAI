@@ -301,10 +301,10 @@ fun formatArea(squareMeters: Float, isEstimate: Boolean, unit: MeasureUnit): Str
 /**
  * Human-readable list of measurements, e.g. for sharing.
  */
-fun formatSummaries(summaries: List<MeasurementSummary>, unit: MeasureUnit): String =
+fun formatSummaries(summaries: List<MeasurementSummary>, unit: MeasureUnit, label: (String) -> String = { it }): String =
     summaries.mapIndexed { i, s ->
         val text = formatValue(ResultValue(s.label ?: "", s.value, s.kind), s.isEstimate, unit)
-        "${i + 1}. ${s.label ?: if (s.isArea) "Area" else "Length"}: $text"
+        "${i + 1}. ${label(s.label ?: if (s.isArea) "Area" else "Length")}: $text"
     }.joinToString("\n")
 
 /**

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="hang_summary">
+        <item quantity="one">%1$d frame · %2$s × %3$s · gap %4$s</item>
+        <item quantity="other">%1$d frames · %2$s × %3$s · gap %4$s</item>
+    </plurals>
+</resources>

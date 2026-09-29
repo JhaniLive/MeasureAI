@@ -1,5 +1,7 @@
 package com.jhani.measurear.capture
 
+import com.jhani.measurear.presentation.resultLabel
+import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -103,10 +105,10 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            RoundIcon(R.drawable.ic_close, "Close", Color.White, onClose)
+            RoundIcon(R.drawable.ic_close, stringResource(R.string.close), Color.White, onClose)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Saved measurements",
+                text = stringResource(R.string.saved_measurements),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
@@ -114,7 +116,7 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
             )
             if (!records.isNullOrEmpty()) {
                 TextButton(onClick = { confirmClear = true }) {
-                    Text("Clear all", color = DangerColor, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.clear_all), color = DangerColor, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -142,7 +144,7 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
             list == null -> Unit
             list.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "No saved measurements yet.\nEvery line and area you measure is saved here automatically.",
+                    text = stringResource(R.string.history_empty),
                     color = Color.White.copy(alpha = 0.6f),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(32.dp)
@@ -170,8 +172,8 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
     if (newProject) {
         RenameDialog(
             initial = "",
-            title = "New project",
-            placeholder = "e.g. Living room",
+            title = stringResource(R.string.new_project),
+            placeholder = stringResource(R.string.project_example),
             onConfirm = { name ->
                 HistoryStore.setCurrentProject(context, name)
                 newProject = false
@@ -183,12 +185,12 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
     moving?.let { record ->
         AlertDialog(
             onDismissRequest = { moving = null },
-            title = { Text("Move to project") },
+            title = { Text(stringResource(R.string.move_to_project)) },
             text = {
                 Column {
                     (listOf<String?>(null) + projects).forEach { p ->
                         Text(
-                            p ?: "No project",
+                            p ?: stringResource(R.string.no_project),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
@@ -202,7 +204,7 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { moving = null }) { Text("Cancel") } }
+            confirmButton = { TextButton(onClick = { moving = null }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
@@ -220,16 +222,16 @@ fun HistoryScreen(unit: MeasureUnit, onClose: () -> Unit, modifier: Modifier = M
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Clear all saved measurements?") },
-            text = { Text("This deletes every saved measurement and photo. It can't be undone.") },
+            title = { Text(stringResource(R.string.clear_all_q)) },
+            text = { Text(stringResource(R.string.clear_all_warn)) },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch { HistoryStore.clearAll(context) }
                     confirmClear = false
-                }) { Text("Clear all", color = DangerColor) }
+                }) { Text(stringResource(R.string.clear_all), color = DangerColor) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -284,7 +286,7 @@ private fun RecordCard(
                     modifier = Modifier.weight(1f)
                 )
                 // ✕ delete this record
-                RoundIcon(R.drawable.ic_close, "Delete", Color.White.copy(alpha = 0.7f), onDelete, size = 32)
+                RoundIcon(R.drawable.ic_close, stringResource(R.string.delete), Color.White.copy(alpha = 0.7f), onDelete, size = 32)
             }
             Text(
                 text = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(record.createdAt)),
@@ -295,7 +297,7 @@ private fun RecordCard(
             record.items.forEach { item ->
                 Text(
                     text = if (item.label != null || item.kind != ValueKind.LENGTH) {
-                        (item.label ?: "Area") + "  " + formatValue(ResultValue(item.label ?: "", item.value, item.kind), item.isEstimate, unit)
+                        (item.label?.let { LocalContext.current.resultLabel(it) } ?: stringResource(R.string.label_area)) + "  " + formatValue(ResultValue(item.label ?: "", item.value, item.kind), item.isEstimate, unit)
                     } else {
                         formatDistance(item.value, item.isEstimate, unit) +
                             "   ↔ ${formatLength(item.horizontal, unit)}  ↕ ${formatLength(item.vertical, unit)}"
@@ -306,9 +308,9 @@ private fun RecordCard(
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SmallAction(R.drawable.ic_edit, "Rename", Color.White, onRename)
-                SmallAction(R.drawable.ic_share, "Share", HudTeal, onShare)
-                SmallAction(R.drawable.ic_history, record.project ?: "Project", Color.White.copy(alpha = 0.8f), onMove)
+                SmallAction(R.drawable.ic_edit, stringResource(R.string.rename), Color.White, onRename)
+                SmallAction(R.drawable.ic_share, stringResource(R.string.share), HudTeal, onShare)
+                SmallAction(R.drawable.ic_history, record.project ?: stringResource(R.string.project), Color.White.copy(alpha = 0.8f), onMove)
             }
         }
     }
@@ -319,8 +321,8 @@ private fun RenameDialog(
     initial: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
-    title: String = "Name this measurement",
-    placeholder: String = "e.g. Kitchen table width"
+    title: String = stringResource(R.string.name_measurement),
+    placeholder: String = stringResource(R.string.name_example)
 ) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
@@ -335,8 +337,8 @@ private fun RenameDialog(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HudTeal, cursorColor = HudTeal)
             )
         },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save", color = HudTeal) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text(stringResource(R.string.save), color = HudTeal) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
     )
 }
 
@@ -389,7 +391,7 @@ private fun ProjectChips(
         (listOf<String?>(null) + projects).forEach { p ->
             val on = p == selected
             Text(
-                p ?: "All",
+                p ?: stringResource(R.string.all),
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (on) HudTeal else CardColor)
@@ -401,7 +403,7 @@ private fun ProjectChips(
             )
         }
         Text(
-            "+ New",
+            "+ " + stringResource(R.string.new_label),
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
                 .border(1.dp, HudTeal.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
@@ -412,7 +414,7 @@ private fun ProjectChips(
         )
         if (onExport != null) {
             Text(
-                "PDF report",
+                stringResource(R.string.pdf_report),
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
@@ -425,7 +427,7 @@ private fun ProjectChips(
     }
     if (selected != null) {
         Text(
-            "New measurements are saved to \"$selected\"",
+            stringResource(R.string.saved_to_project, selected),
             color = Color.White.copy(alpha = 0.5f),
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 20.dp)

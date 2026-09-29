@@ -1,5 +1,7 @@
 package com.jhani.measurear.level
 
+import com.jhani.measurear.R
+import androidx.compose.ui.res.stringResource
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
@@ -97,7 +99,7 @@ fun LevelScreen(modifier: Modifier = Modifier) {
     ) {
         if (!sensor.isAvailable) {
             Text(
-                text = "This phone has no motion sensor for the level.",
+                text = stringResource(R.string.level_none),
                 modifier = Modifier.align(Alignment.Center).padding(32.dp),
                 color = Color.White
             )
@@ -139,9 +141,9 @@ fun LevelScreen(modifier: Modifier = Modifier) {
         ) {
             Text(
                 text = when {
-                    isLevel -> "LEVEL"
-                    shown.mode == LevelMode.FLAT -> "Lay the phone on the surface"
-                    else -> "Hold the phone's edge against the surface"
+                    isLevel -> stringResource(R.string.level_ok)
+                    shown.mode == LevelMode.FLAT -> stringResource(R.string.level_flat)
+                    else -> stringResource(R.string.level_edge)
                 },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -149,7 +151,7 @@ fun LevelScreen(modifier: Modifier = Modifier) {
                 color = accent
             )
             Text(
-                text = if (ref != null) "Relative to your reference · tap to reset" else "Tap to set a reference angle",
+                text = if (ref != null) stringResource(R.string.level_relative) else stringResource(R.string.level_set_ref),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.6f)
             )

@@ -1,5 +1,7 @@
 package com.jhani.measurear.level
 
+import com.jhani.measurear.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,7 +75,7 @@ fun CompassScreen(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         if (!sensor.isAvailable) {
-            Text("This phone has no compass sensor", color = Color.White.copy(alpha = 0.7f))
+            Text(stringResource(R.string.compass_none), color = Color.White.copy(alpha = 0.7f))
             return@Box
         }
         val heading = reading?.heading ?: 0f
@@ -94,14 +96,14 @@ fun CompassScreen(modifier: Modifier = Modifier) {
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    CompassMath.cardinal(heading),
+                    directionName(CompassMath.cardinal(heading)),
                     color = HudTeal,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 2.sp
                 )
                 Spacer(Modifier.height(4.dp))
-                Text("Magnetic north", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+                Text(stringResource(R.string.magnetic_north), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
             }
 
             CompassDial(heading = heading, locked = locked, modifier = Modifier.size(300.dp))
@@ -111,9 +113,9 @@ fun CompassScreen(modifier: Modifier = Modifier) {
                     val turn = CompassMath.delta(heading, target)
                     Text(
                         when {
-                            abs(turn) < 2f -> "On bearing ${target.roundToInt()}°"
-                            turn > 0 -> "Turn ${turn.roundToInt()}° right"
-                            else -> "Turn ${(-turn).roundToInt()}° left"
+                            abs(turn) < 2f -> stringResource(R.string.on_bearing, target.roundToInt())
+                            turn > 0 -> stringResource(R.string.turn_right, turn.roundToInt())
+                            else -> stringResource(R.string.turn_left, (-turn).roundToInt())
                         },
                         color = if (abs(turn) < 2f) HudTeal else Color.White,
                         fontSize = 17.sp,
@@ -122,7 +124,7 @@ fun CompassScreen(modifier: Modifier = Modifier) {
                     Spacer(Modifier.height(10.dp))
                 }
                 Text(
-                    if (locked == null) "Lock bearing" else "Unlock",
+                    if (locked == null) stringResource(R.string.lock_bearing) else stringResource(R.string.unlock),
                     modifier = Modifier
                         .clip(RoundedCornerShape(24.dp))
                         .background(if (locked == null) HudTeal else HudTealDark)
@@ -135,7 +137,7 @@ fun CompassScreen(modifier: Modifier = Modifier) {
                 if (reading?.needsCalibration == true) {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Compass needs calibration — move the phone in a figure-8",
+                        stringResource(R.string.compass_calibrate),
                         color = HudAmber,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
@@ -151,6 +153,10 @@ fun CompassScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun CompassDial(heading: Float, locked: Float?, modifier: Modifier = Modifier) {
     val textMeasurer = rememberTextMeasurer()
+    val dirN = directionName("N")
+    val dirE = directionName("E")
+    val dirS = directionName("S")
+    val dirW = directionName("W")
     Canvas(modifier) {
         val c = center
         val r = size.minDimension / 2f
@@ -169,7 +175,7 @@ private fun CompassDial(heading: Float, locked: Float?, modifier: Modifier = Mod
                     inner, outer, strokeWidth = (if (major) 2.5f else 1.2f).dp.toPx(), cap = StrokeCap.Round
                 )
                 if (major) {
-                    val label = when (deg) { 0 -> "N"; 90 -> "E"; 180 -> "S"; 270 -> "W"; else -> "$deg" }
+                    val label = when (deg) { 0 -> dirN; 90 -> dirE; 180 -> dirS; 270 -> dirW; else -> "$deg" }
                     val cardinal = deg % 90 == 0
                     val layout = textMeasurer.measure(
                         label,
@@ -209,3 +215,18 @@ private fun CompassDial(heading: Float, locked: Float?, modifier: Modifier = Mod
         drawCircle(BrandDeep, 2.5.dp.toPx(), c)
     }
 }
+
+/** An 8-point direction code ("NE") in the user's language. */
+@Composable
+private fun directionName(code: String): String = androidx.compose.ui.res.stringResource(
+    when (code) {
+        "N" -> com.jhani.measurear.R.string.dir_n
+        "NE" -> com.jhani.measurear.R.string.dir_ne
+        "E" -> com.jhani.measurear.R.string.dir_e
+        "SE" -> com.jhani.measurear.R.string.dir_se
+        "S" -> com.jhani.measurear.R.string.dir_s
+        "SW" -> com.jhani.measurear.R.string.dir_sw
+        "W" -> com.jhani.measurear.R.string.dir_w
+        else -> com.jhani.measurear.R.string.dir_nw
+    }
+)

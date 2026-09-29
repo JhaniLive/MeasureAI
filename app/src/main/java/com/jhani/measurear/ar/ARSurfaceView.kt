@@ -787,12 +787,18 @@ class ARSurfaceView(
     }
 
     /** World-space origin and direction of the ray through the screen center. */
-    private fun centerRay(): Array<FloatArray>? {
+    private fun centerRay(): Array<FloatArray>? = rayThrough(viewportWidth / 2f, viewportHeight / 2f)
+
+    /** World-space origin and direction of the ray through view pixel ([x], [y]). */
+    private fun rayThrough(x: Float, y: Float): Array<FloatArray>? {
+        if (viewportWidth == 0 || viewportHeight == 0) return null
         val viewProjection = FloatArray(16)
         Matrix.multiplyMM(viewProjection, 0, projectionMatrix, 0, viewMatrix, 0)
         if (!Matrix.invertM(inverseViewProjection, 0, viewProjection, 0)) return null
-        val near = unproject(0f, 0f, -1f)
-        val far = unproject(0f, 0f, 1f)
+        val ndcX = 2f * x / viewportWidth - 1f
+        val ndcY = 1f - 2f * y / viewportHeight
+        val near = unproject(ndcX, ndcY, -1f)
+        val far = unproject(ndcX, ndcY, 1f)
         val dir = floatArrayOf(far[0] - near[0], far[1] - near[1], far[2] - near[2])
         val len = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2])
         if (len < 1e-6f) return null
@@ -1218,13 +1224,14 @@ class ARSurfaceView(
         (mode == MeasureMode.HEIGHT && index == 1) || (mode == MeasureMode.VOLUME && index == 3)
 
     /** Where the next point of the current shape would go, and whether it is reliable. */
-    private fun nextShapePoint(target: ReticleTarget?): Pair<Vec3, Boolean>? {
+    private fun nextShapePoint(target: ReticleTarget?, tap: FloatArray? = null): Pair<Vec3, Boolean>? {
         val mode = sessionManager.mode
         val draft = sessionManager.draft
         if (isVerticalStep(mode, draft.size)) {
             val base = draft.getOrNull(if (mode == MeasureMode.VOLUME) 1 else 0) ?: return null
             if (base.anchor.trackingState != TrackingState.TRACKING) return null
-            val ray = centerRay() ?: return null
+            // The top is where the line of sight (crosshair, or through the tap) passes the vertical
+            val ray = (if (tap != null) rayThrough(tap[0], tap[1]) else centerRay()) ?: return null
             val top = Geometry.verticalFromBase(base.anchor.pose.toVec(), ray[0].toVec(), ray[1].toVec()) ?: return null
             return top to base.onSurface
         }
@@ -1260,7 +1267,8 @@ class ARSurfaceView(
         }
 
         val vertical = isVerticalStep(mode, draft.size)
-        val (point, onSurface) = nextShapePoint(if (vertical) null else target) ?: run {
+        val tap = if (fromTap) floatArrayOf(tapX, tapY) else null
+        val (point, onSurface) = nextShapePoint(if (vertical) null else target, tap) ?: run {
             sessionManager.showHint(
                 if (surfaceCount == 0) "Nothing to measure on yet — sweep the phone slowly over the floor or a wall"
                 else "Nothing under the crosshair — aim at a surface or object"

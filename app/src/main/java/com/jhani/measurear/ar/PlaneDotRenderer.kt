@@ -63,7 +63,7 @@ class PlaneDotRenderer {
             }
         """
 
-        // 5 cm grid, 4 mm dots. Brightest within ~35 cm of the reticle, gone by ~1 m.
+        // 5 cm grid over a light tint. Dots grow with distance and are brightest near the reticle.
         // With depth, dots behind real objects (cups, laptops…) are hidden. highp: depth is
         // in millimeters, beyond mediump's exact range.
         private const val FRAGMENT_SHADER_CODE = """
@@ -93,10 +93,13 @@ class PlaneDotRenderer {
                 float spacing = 0.05;
                 vec2 cell = fract(v_Local / spacing) - 0.5;
                 float d = length(cell) * spacing;
-                float dotMask = 1.0 - smoothstep(0.0025, 0.004, d);
+                // Dots grow with distance so they stay visible (~7 mm near, ~12 mm at 2 m+)
+                float radius = clamp(0.004 + v_ViewDepth * 0.003, 0.006, 0.012);
+                float dotMask = 1.0 - smoothstep(radius * 0.6, radius, d);
                 float focusFade = 1.0 - smoothstep(0.35, 1.0, distance(v_World, u_Focus));
-                float alpha = dotMask * mix(0.18, 0.18 + 0.72 * focusFade, u_FocusEnabled);
-                if (alpha < 0.01) discard;
+                float dotAlpha = dotMask * mix(0.55, 0.55 + 0.4 * focusFade, u_FocusEnabled);
+                // Light tint over the whole detected surface, so it's obvious where to measure
+                float alpha = max(dotAlpha, 0.12);
 
                 if (u_UseDepth > 0.5) {
                     float real = realDepthMm();

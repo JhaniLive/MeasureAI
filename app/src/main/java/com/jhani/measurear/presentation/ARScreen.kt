@@ -139,6 +139,8 @@ fun ARScreen(
         }
     }
     var showPhoneHeight by remember { mutableStateOf(false) }
+    // Step-by-step guide for the current screen (the ? button); opens by itself the first time
+    var helpTopic by remember { mutableStateOf<String?>(null) }
     var showLanguage by remember { mutableStateOf(false) }
     val language = remember { AppLanguage.saved(context) }
     // Will it fit?: chosen box size, and the size picker
@@ -302,6 +304,25 @@ fun ARScreen(
         }
     }
 
+    val screenTopic = if (tool == Tool.MEASURE) HelpTopic.of(mode) else tool.name
+    // Level and Compass don't wait for the camera
+    val screenReady = sessionState is ARSessionState.SessionReady && (tool != Tool.MEASURE || !showLoader) &&
+        !showModes && !showHistory
+    LaunchedEffect(screenTopic, screenReady) {
+        if (screenReady && helpTopic == null && !HelpSeen.isSeen(context, screenTopic)) helpTopic = screenTopic
+    }
+    helpTopic?.let { topic ->
+        val name = when (topic) {
+            HelpTopic.LEVEL -> stringResource(R.string.tab_level)
+            HelpTopic.COMPASS -> stringResource(R.string.tab_compass)
+            else -> MeasureMode.values().firstOrNull { it.name == topic }?.let { context.modeTitle(it) } ?: ""
+        }
+        HelpDialog(topic = topic, name = name, onClose = {
+            HelpSeen.markSeen(context, topic)
+            helpTopic = null
+        })
+    }
+
     if (showHistory) {
         HistoryScreen(unit = unit, onClose = { showHistory = false }, modifier = modifier)
         return
@@ -311,6 +332,14 @@ fun ARScreen(
         when (val state = sessionState) {
             is ARSessionState.SessionReady -> if (tool != Tool.MEASURE) {
                 if (tool == Tool.LEVEL) LevelScreen() else com.jhani.measurear.level.CompassScreen()
+                HelpButton(
+                    onClick = { helpTopic = tool.name },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        // Below the Level's instruction line, which spans the top
+                        .padding(top = 64.dp, end = 20.dp)
+                )
                 ToolTabs(
                     selected = tool,
                     onSelect = { tool = it },
@@ -432,6 +461,7 @@ fun ARScreen(
                     },
                     onCapture = ::capture,
                     onHistory = { showHistory = true },
+                    onHelp = { helpTopic = HelpTopic.of(mode) },
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
 
@@ -560,7 +590,7 @@ fun ARScreen(
                     )
                 }
 
-                if (showHang) {
+                if (showHang && helpTopic == null) {
                     HangDialog(
                         current = hangSpec,
                         unit = unit,
@@ -575,7 +605,7 @@ fun ARScreen(
                     )
                 }
 
-                if (showFitSize) {
+                if (showFitSize && helpTopic == null) {
                     FitSizeDialog(
                         current = fitSpec,
                         unit = unit,
@@ -736,6 +766,7 @@ private fun HudTopBar(
     onToggleOcclusion: () -> Unit,
     onCapture: () -> Unit,
     onHistory: () -> Unit,
+    onHelp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -749,8 +780,12 @@ private fun HudTopBar(
             Column(modifier = Modifier.weight(1f)) {
                 // Current mode; tap for the mode picker. Hidden developer switch: long-press
                 // toggles the debug view
-                Box(Modifier.combinedClickable(onClick = onModeClick, onLongClick = onToggleDebug)) {
-                    ModeChip(mode = mode, onClick = onModeClick)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.combinedClickable(onClick = onModeClick, onLongClick = onToggleDebug)) {
+                        ModeChip(mode = mode, onClick = onModeClick)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    HelpButton(onClick = onHelp)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 AnimatedContent(

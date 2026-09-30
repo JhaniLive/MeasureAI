@@ -295,7 +295,8 @@ fun formatDistance(meters: Float, isEstimate: Boolean, unit: MeasureUnit): Strin
 fun formatArea(squareMeters: Float, isEstimate: Boolean, unit: MeasureUnit): String {
     val value = when (unit) {
         MeasureUnit.METRIC ->
-            if (squareMeters < 1f) "%.1f cm²".format(squareMeters * 10_000f) else "%.2f m²".format(squareMeters)
+            // m² from 0.1 m² (a 1.15 × 0.81 m table is 0.93 m², not 9312.5 cm²); cm² for small things
+            if (squareMeters < 0.1f) "%.1f cm²".format(squareMeters * 10_000f) else "%.2f m²".format(squareMeters)
         MeasureUnit.IMPERIAL -> {
             val squareFeet = squareMeters * 10.7639f
             if (squareFeet < 1f) "%.1f in²".format(squareFeet * 144f) else "%.2f ft²".format(squareFeet)

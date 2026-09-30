@@ -21,4 +21,9 @@ class FormatTest {
         assertEquals("200 × 90 × 85 cm", formatBoxSize(2f, 0.9f, 0.85f, MeasureUnit.METRIC))
         assertEquals("79 × 35 × 33 in", formatBoxSize(2f, 0.9f, 0.85f, MeasureUnit.IMPERIAL))
     }
+    @Test fun areaInSquareMetersFromATenth() {
+        assertEquals("0.93 m²", formatArea(0.93125f, false, MeasureUnit.METRIC))
+        assertEquals("≈ 1.80 m²", formatArea(1.8f, true, MeasureUnit.METRIC))
+        assertEquals("45.9 cm²", formatArea(0.00459f, false, MeasureUnit.METRIC))
+    }
 }

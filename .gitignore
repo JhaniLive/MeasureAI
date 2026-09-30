@@ -24,3 +24,6 @@ keystore.properties
 
 # Built release binaries (rebuild with gradlew assembleRelease / bundleRelease)
 store/release/
+
+# Python caches (tools)
+__pycache__/

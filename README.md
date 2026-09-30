@@ -9,7 +9,9 @@ Measure anything with your phone's camera: an ARCore tape measure for Android.
 ![MeasureAR](docs/banner.png)
 
 ## Features
-- Ten modes: Line, Height, Far height (buildings), Distance, Angle, Path, Rectangle, Circle, Area, Volume
+- Twelve modes: Line, Height, Far height (buildings), Distance, Angle, Path, Rectangle, Circle, Area, Volume, Hang pictures, Will it fit?
+- Materials calculator (paint, tiles, flooring), floor-plan images, projects with PDF reports
+- Illustrated step-by-step help on every screen; English, Hindi, Urdu and Telugu
 - Card calibration, live accuracy meter, compass, bubble level, launcher shortcuts
 - Detected surfaces shown as a teal grid; approximate readings marked ≈
 - Tap or Stamp to place points, drag to adjust, magnifier for precise aiming

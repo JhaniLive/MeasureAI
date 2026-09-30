@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">MeasureAR</string>
+    <string name="acc_estimate">Estimate</string>
+    <string name="acc_good">Good</string>
+    <string name="acc_ok">OK</string>
+    <string name="acc_rough">Rough</string>
     <string name="all">All</string>
     <string name="apply">Apply</string>
     <string name="box_area">%1$s m²/box</string>
@@ -27,6 +31,7 @@
     <string name="calibration">Calibration</string>
     <string name="can_size">%1$d L can</string>
     <string name="cancel">Cancel</string>
+    <string name="cd_accuracy">Accuracy of the next point — tap for the exact margin</string>
     <string name="cd_flash_off">Turn flashlight off</string>
     <string name="cd_flash_on">Turn flashlight on</string>
     <string name="cd_grid_hide">Hide surface grid</string>
@@ -34,6 +39,7 @@
     <string name="cd_help">Help</string>
     <string name="cd_magnifier_off">Turn magnifier off</string>
     <string name="cd_magnifier_on">Turn magnifier on</string>
+    <string name="cd_more">More options</string>
     <string name="cd_save_screenshot">Save screenshot</string>
     <string name="clear">Clear</string>
     <string name="clear_all">Clear all</string>
@@ -69,6 +75,7 @@
     <string name="fit_title">What do you want to fit?</string>
     <string name="fit_use_mine">Use my size</string>
     <string name="flash_unavailable">Flashlight isn\'t available right now</string>
+    <string name="flashlight">Flashlight</string>
     <string name="flooring_detail">Covers %1$s m², including 8%% extra for cuts</string>
     <string name="ground_found">✓ Ground found · phone %1$s up</string>
     <string name="guide_approx">Approximate here (≈) — on the teal dots it\'s exact</string>
@@ -258,10 +265,13 @@
     <string name="loader_starting">Starting the camera</string>
     <string name="lock_bearing">Lock bearing</string>
     <string name="magnetic_north">Magnetic north</string>
+    <string name="magnifier">Magnifier</string>
     <string name="make_level">Make level</string>
     <string name="make_vertical">Make vertical</string>
     <string name="materials">Materials</string>
     <string name="materials_for">for %1$s</string>
+    <string name="menu_occlusion">Hide dots behind objects</string>
+    <string name="menu_units">Units</string>
     <string name="mode_angle">Angle</string>
     <string name="mode_area">Area</string>
     <string name="mode_calibrate">Calibrate</string>
@@ -309,6 +319,11 @@
     <string name="saved">Saved</string>
     <string name="saved_measurements">Saved measurements</string>
     <string name="saved_to_project">New measurements are saved to \"%1$s\"</string>
+    <string name="sec_home">Home</string>
+    <string name="sec_measure">Measure</string>
+    <string name="sec_outdoors">Outdoors</string>
+    <string name="sec_recent">Recent</string>
+    <string name="sec_room">Room &amp; floor</string>
     <string name="share">Share</string>
     <string name="share_measurement">Share measurement</string>
     <string name="share_report">Share report</string>
@@ -323,6 +338,7 @@
     <string name="step_more">Point %1$d — %2$d more to go</string>
     <string name="step_point_of">Point %1$d of %2$d</string>
     <string name="step_points">%1$d points · tap Done to finish</string>
+    <string name="surface_grid">Surface dots</string>
     <string name="tab_compass">Compass</string>
     <string name="tab_flooring">Flooring</string>
     <string name="tab_level">Level</string>
@@ -346,5 +362,13 @@
     <string name="unlock">Unlock</string>
     <string name="vertical">Vertical</string>
     <string name="vertical_line">Vertical line</string>
+    <string name="welcome_1_b">Point at a floor, table or wall and tap to measure lengths, heights and angles — no tape needed.</string>
+    <string name="welcome_1_t">Measure with your camera</string>
+    <string name="welcome_2_b">Get room areas and floor plans, work out paint and tiles, hang pictures level and check if a sofa fits.</string>
+    <string name="welcome_2_t">Rooms, walls and furniture</string>
+    <string name="welcome_3_b">MeasureAR uses the camera only to see surfaces. Nothing is uploaded — your measurements stay on your phone.</string>
+    <string name="welcome_3_t">Camera access</string>
+    <string name="welcome_skip">Skip</string>
+    <string name="welcome_start">Allow camera and start</string>
     <string name="windows">Windows</string>
 </resources>

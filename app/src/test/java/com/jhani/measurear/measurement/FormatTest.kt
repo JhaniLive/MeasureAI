@@ -26,4 +26,8 @@ class FormatTest {
         assertEquals("≈ 1.80 m²", formatArea(1.8f, true, MeasureUnit.METRIC))
         assertEquals("45.9 cm²", formatArea(0.00459f, false, MeasureUnit.METRIC))
     }
+    @Test fun wholeCentimetresWithoutDecimal() {
+        assertEquals("90 cm", formatLength(0.9f, MeasureUnit.METRIC))
+        assertEquals("8.6 cm", formatLength(0.0856f, MeasureUnit.METRIC))
+    }
 }

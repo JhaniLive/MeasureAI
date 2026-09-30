@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="acc_estimate">अनुमान</string>
+    <string name="acc_good">अच्छा</string>
+    <string name="acc_ok">ठीक</string>
+    <string name="acc_rough">मोटा अनुमान</string>
     <string name="all">सभी</string>
     <string name="apply">लागू करें</string>
     <string name="box_area">%1$s m²/डिब्बा</string>
@@ -26,6 +30,7 @@
     <string name="calibration">कैलिब्रेशन</string>
     <string name="can_size">%1$d लीटर डिब्बा</string>
     <string name="cancel">रद्द करें</string>
+    <string name="cd_accuracy">अगले बिंदु की सटीकता — सटीक अंतर के लिए टैप करें</string>
     <string name="cd_flash_off">टॉर्च बंद करें</string>
     <string name="cd_flash_on">टॉर्च चालू करें</string>
     <string name="cd_grid_hide">सतह ग्रिड छिपाएँ</string>
@@ -33,6 +38,7 @@
     <string name="cd_help">मदद</string>
     <string name="cd_magnifier_off">मैग्निफ़ायर बंद करें</string>
     <string name="cd_magnifier_on">मैग्निफ़ायर चालू करें</string>
+    <string name="cd_more">और विकल्प</string>
     <string name="cd_save_screenshot">स्क्रीनशॉट सेव करें</string>
     <string name="clear">साफ़ करें</string>
     <string name="clear_all">सब साफ़ करें</string>
@@ -68,6 +74,7 @@
     <string name="fit_title">आप क्या फिट करना चाहते हैं?</string>
     <string name="fit_use_mine">मेरा आकार इस्तेमाल करें</string>
     <string name="flash_unavailable">टॉर्च अभी उपलब्ध नहीं है</string>
+    <string name="flashlight">टॉर्च</string>
     <string name="flooring_detail">%1$s m² ढकता है, कटाई के लिए 8%% अतिरिक्त सहित</string>
     <string name="ground_found">✓ ज़मीन मिली · फ़ोन %1$s ऊपर</string>
     <string name="guide_approx">यहाँ अनुमानित (≈) — हरे-नीले बिंदुओं पर सटीक है</string>
@@ -257,10 +264,13 @@
     <string name="loader_starting">कैमरा शुरू हो रहा है</string>
     <string name="lock_bearing">दिशा लॉक करें</string>
     <string name="magnetic_north">चुंबकीय उत्तर</string>
+    <string name="magnifier">आवर्धक</string>
     <string name="make_level">समतल करें</string>
     <string name="make_vertical">सीधा करें</string>
     <string name="materials">सामग्री</string>
     <string name="materials_for">%1$s के लिए</string>
+    <string name="menu_occlusion">चीज़ों के पीछे बिंदु छिपाएँ</string>
+    <string name="menu_units">इकाई</string>
     <string name="mode_angle">कोण</string>
     <string name="mode_area">क्षेत्रफल</string>
     <string name="mode_calibrate">कैलिब्रेट</string>
@@ -308,6 +318,11 @@
     <string name="saved">सेव हुआ</string>
     <string name="saved_measurements">सेव किए गए माप</string>
     <string name="saved_to_project">नए माप \"%1$s\" में सेव होते हैं</string>
+    <string name="sec_home">घर</string>
+    <string name="sec_measure">नापें</string>
+    <string name="sec_outdoors">बाहर</string>
+    <string name="sec_recent">हाल ही में</string>
+    <string name="sec_room">कमरा और फ़र्श</string>
     <string name="share">शेयर करें</string>
     <string name="share_measurement">माप शेयर करें</string>
     <string name="share_report">रिपोर्ट शेयर करें</string>
@@ -322,6 +337,7 @@
     <string name="step_more">बिंदु %1$d — %2$d और बाकी</string>
     <string name="step_point_of">बिंदु %1$d / %2$d</string>
     <string name="step_points">%1$d बिंदु · ख़त्म करने के लिए \"हो गया\" टैप करें</string>
+    <string name="surface_grid">सतह के बिंदु</string>
     <string name="tab_compass">कम्पास</string>
     <string name="tab_flooring">फ़्लोरिंग</string>
     <string name="tab_level">लेवल</string>
@@ -345,5 +361,13 @@
     <string name="unlock">अनलॉक</string>
     <string name="vertical">ऊर्ध्वाधर</string>
     <string name="vertical_line">सीधी रेखा</string>
+    <string name="welcome_1_b">फ़र्श, मेज़ या दीवार की ओर रखें और टैप करके लंबाई, ऊँचाई और कोण नापें — फ़ीते की ज़रूरत नहीं।</string>
+    <string name="welcome_1_t">कैमरे से नापें</string>
+    <string name="welcome_2_b">कमरों का क्षेत्रफल और फ़्लोर प्लान पाएँ, पेंट और टाइल का हिसाब लगाएँ, तस्वीरें सीधी टाँगें और देखें कि सोफ़ा फिट होगा या नहीं।</string>
+    <string name="welcome_2_t">कमरे, दीवारें और फ़र्नीचर</string>
+    <string name="welcome_3_b">MeasureAR कैमरे का इस्तेमाल सिर्फ़ सतहें देखने के लिए करता है। कुछ भी अपलोड नहीं होता — आपके माप आपके फ़ोन पर ही रहते हैं।</string>
+    <string name="welcome_3_t">कैमरे की अनुमति</string>
+    <string name="welcome_skip">छोड़ें</string>
+    <string name="welcome_start">कैमरा अनुमति दें और शुरू करें</string>
     <string name="windows">खिड़कियाँ</string>
 </resources>

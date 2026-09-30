@@ -1,5 +1,8 @@
 package com.jhani.measurear.presentation
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
@@ -191,7 +194,7 @@ fun HelpButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val description = stringResource(R.string.cd_help)
     Box(
         modifier = modifier
-            .size(36.dp)
+            .size(44.dp)
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.55f))
             .border(1.5.dp, HudTeal, CircleShape)
@@ -836,5 +839,95 @@ private class Sketch(val d: DrawScope, val tm: TextMeasurer) {
                 }
             }
         }
+    }
+}
+
+/** Whether the first-launch welcome has been shown. */
+object WelcomePrefs {
+    private const val PREFS = "measurear"
+    private const val KEY = "welcome_done"
+
+    fun isDone(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
+
+    fun markDone(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, true).apply()
+}
+
+/**
+ * First launch: what the app does, then why it needs the camera, before Android's permission
+ * prompt. [onDone] asks for the camera.
+ */
+@Composable
+fun WelcomeScreen(onDone: () -> Unit) {
+    val pages = listOf(
+        HelpStep(HelpPic.LINE_END, R.string.welcome_1_t, R.string.welcome_1_b),
+        HelpStep(HelpPic.RECT_DONE, R.string.welcome_2_t, R.string.welcome_2_b),
+        HelpStep(HelpPic.SCAN_FLOOR, R.string.welcome_3_t, R.string.welcome_3_b)
+    )
+    val pager = rememberPagerState { pages.size }
+    val scope = rememberCoroutineScope()
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0B1211))
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(48.dp)) {
+            Text("MeasureAR", color = HudTeal, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (pager.currentPage < pages.lastIndex) {
+                Text(
+                    stringResource(R.string.welcome_skip),
+                    color = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { scope.launch { pager.animateScrollToPage(pages.lastIndex) } }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { page ->
+            val step = pages[page]
+            Column {
+                HelpPicture(
+                    step.pic,
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.2f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xFF17221F))
+                )
+                Spacer(Modifier.height(28.dp))
+                Text(stringResource(step.title), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp)
+                Spacer(Modifier.height(10.dp))
+                Text(stringResource(step.body), color = Color.White.copy(alpha = 0.8f), fontSize = 16.sp, lineHeight = 23.sp)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 16.dp)) {
+            pages.indices.forEach { i ->
+                Box(
+                    Modifier
+                        .size(width = if (i == pager.currentPage) 22.dp else 8.dp, height = 8.dp)
+                        .clip(CircleShape)
+                        .background(if (i == pager.currentPage) HudTeal else Color.White.copy(alpha = 0.25f))
+                )
+            }
+        }
+        val last = pager.currentPage == pages.lastIndex
+        Text(
+            if (last) stringResource(R.string.welcome_start) else stringResource(R.string.help_next) + "  ›",
+            color = Color.Black,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(HudTeal)
+                .clickable { if (last) onDone() else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } }
+                .padding(vertical = 16.dp)
+        )
     }
 }

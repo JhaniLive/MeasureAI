@@ -74,13 +74,6 @@ fun OnboardingHint(modifier: Modifier = Modifier) {
             )
             drawCircle(HudTeal, radius = 6.dp.toPx(), center = Offset(cx, top + phoneH / 2f), style = Stroke(2.dp.toPx()))
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.onboarding),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            textAlign = TextAlign.Center
-        )
+        // Its instruction is shown in the coach line above the controls
     }
 }

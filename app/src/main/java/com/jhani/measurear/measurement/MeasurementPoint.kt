@@ -246,8 +246,14 @@ fun formatBoxSize(width: Float, depth: Float, height: Float, unit: MeasureUnit):
     return listOf(width, depth, height).joinToString(" × ") { Math.round(it * factor).toString() } + " " + label
 }
 
+/** "90 cm" for whole centimetres, "28.5 cm" otherwise (never "90.0 cm"). */
+fun formatCentimeters(cm: Float): String {
+    val tenths = Math.round(cm * 10f)
+    return if (tenths % 10 == 0) "${tenths / 10} cm" else "%.1f cm".format(tenths / 10f)
+}
+
 fun formatLength(meters: Float, unit: MeasureUnit): String = when (unit) {
-    MeasureUnit.METRIC -> if (meters >= 1f) "%.2f m".format(meters) else "%.1f cm".format(meters * 100f)
+    MeasureUnit.METRIC -> if (meters >= 1f) "%.2f m".format(meters) else formatCentimeters(meters * 100f)
     MeasureUnit.IMPERIAL -> formatFeetInches(meters)
 }
 

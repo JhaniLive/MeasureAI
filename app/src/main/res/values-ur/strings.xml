@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="acc_estimate">تخمینہ</string>
+    <string name="acc_good">اچھا</string>
+    <string name="acc_ok">ٹھیک</string>
+    <string name="acc_rough">موٹا اندازہ</string>
     <string name="all">سب</string>
     <string name="apply">لاگو کریں</string>
     <string name="box_area">%1$s m²/ڈبہ</string>
@@ -26,6 +30,7 @@
     <string name="calibration">کیلیبریشن</string>
     <string name="can_size">%1$d لیٹر ڈبہ</string>
     <string name="cancel">منسوخ کریں</string>
+    <string name="cd_accuracy">اگلے نقطے کی درستگی — درست فرق کے لیے ٹیپ کریں</string>
     <string name="cd_flash_off">ٹارچ بند کریں</string>
     <string name="cd_flash_on">ٹارچ آن کریں</string>
     <string name="cd_grid_hide">سطح کا گرڈ چھپائیں</string>
@@ -33,6 +38,7 @@
     <string name="cd_help">مدد</string>
     <string name="cd_magnifier_off">میگنیفائر بند کریں</string>
     <string name="cd_magnifier_on">میگنیفائر آن کریں</string>
+    <string name="cd_more">مزید اختیارات</string>
     <string name="cd_save_screenshot">اسکرین شاٹ محفوظ کریں</string>
     <string name="clear">صاف کریں</string>
     <string name="clear_all">سب صاف کریں</string>
@@ -68,6 +74,7 @@
     <string name="fit_title">آپ کیا رکھنا چاہتے ہیں؟</string>
     <string name="fit_use_mine">میرا سائز استعمال کریں</string>
     <string name="flash_unavailable">ٹارچ ابھی دستیاب نہیں ہے</string>
+    <string name="flashlight">ٹارچ</string>
     <string name="flooring_detail">%1$s m² ڈھکتا ہے، کٹائی کے لیے 8%% اضافی سمیت</string>
     <string name="ground_found">✓ زمین ملی · فون %1$s اوپر</string>
     <string name="guide_approx">یہاں تخمینی (≈) — فیروزی نقطوں پر درست ہے</string>
@@ -257,10 +264,13 @@
     <string name="loader_starting">کیمرہ شروع ہو رہا ہے</string>
     <string name="lock_bearing">سمت لاک کریں</string>
     <string name="magnetic_north">مقناطیسی شمال</string>
+    <string name="magnifier">میگنیفائر</string>
     <string name="make_level">ہموار کریں</string>
     <string name="make_vertical">سیدھا کریں</string>
     <string name="materials">سامان</string>
     <string name="materials_for">%1$s کے لیے</string>
+    <string name="menu_occlusion">چیزوں کے پیچھے نقطے چھپائیں</string>
+    <string name="menu_units">اکائی</string>
     <string name="mode_angle">زاویہ</string>
     <string name="mode_area">رقبہ</string>
     <string name="mode_calibrate">کیلیبریٹ</string>
@@ -308,6 +318,11 @@
     <string name="saved">محفوظ ہوا</string>
     <string name="saved_measurements">محفوظ شدہ پیمائشیں</string>
     <string name="saved_to_project">نئی پیمائشیں \"%1$s\" میں محفوظ ہوتی ہیں</string>
+    <string name="sec_home">گھر</string>
+    <string name="sec_measure">ناپیں</string>
+    <string name="sec_outdoors">باہر</string>
+    <string name="sec_recent">حالیہ</string>
+    <string name="sec_room">کمرہ اور فرش</string>
     <string name="share">شیئر کریں</string>
     <string name="share_measurement">پیمائش شیئر کریں</string>
     <string name="share_report">رپورٹ شیئر کریں</string>
@@ -322,6 +337,7 @@
     <string name="step_more">نقطہ %1$d — %2$d مزید باقی</string>
     <string name="step_point_of">نقطہ %1$d از %2$d</string>
     <string name="step_points">%1$d نقطے · ختم کرنے کے لیے \"مکمل\" ٹیپ کریں</string>
+    <string name="surface_grid">سطح کے نقطے</string>
     <string name="tab_compass">قطب نما</string>
     <string name="tab_flooring">فرش</string>
     <string name="tab_level">لیول</string>
@@ -345,5 +361,13 @@
     <string name="unlock">ان لاک</string>
     <string name="vertical">عمودی</string>
     <string name="vertical_line">سیدھی لکیر</string>
+    <string name="welcome_1_b">فرش، میز یا دیوار کی طرف رکھیں اور ٹیپ کر کے لمبائی، اونچائی اور زاویے ناپیں — فیتے کی ضرورت نہیں۔</string>
+    <string name="welcome_1_t">کیمرے سے ناپیں</string>
+    <string name="welcome_2_b">کمروں کا رقبہ اور فلور پلان پائیں، پینٹ اور ٹائل کا حساب لگائیں، تصویریں سیدھی لٹکائیں اور دیکھیں کہ صوفہ فٹ ہوگا یا نہیں۔</string>
+    <string name="welcome_2_t">کمرے، دیواریں اور فرنیچر</string>
+    <string name="welcome_3_b">MeasureAR کیمرے کو صرف سطحیں دیکھنے کے لیے استعمال کرتا ہے۔ کچھ بھی اپ لوڈ نہیں ہوتا — آپ کی پیمائشیں آپ کے فون پر ہی رہتی ہیں۔</string>
+    <string name="welcome_3_t">کیمرے کی اجازت</string>
+    <string name="welcome_skip">چھوڑیں</string>
+    <string name="welcome_start">کیمرے کی اجازت دیں اور شروع کریں</string>
     <string name="windows">کھڑکیاں</string>
 </resources>

@@ -1,5 +1,7 @@
 package com.jhani.measurear.presentation
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import com.jhani.measurear.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -76,8 +78,65 @@ fun ModeChip(mode: MeasureMode, onClick: () -> Unit, modifier: Modifier = Modifi
     ) {
         ModeIllustration(mode, Modifier.size(28.dp), compact = true)
         Spacer(Modifier.width(6.dp))
-        Text(stringResource(mode.titleRes()), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text(
+            stringResource(mode.titleRes()), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+        )
         Text("  ▾", color = HudTeal, fontSize = 12.sp)
+    }
+}
+
+/** The mode sheet's sections, so twelve modes are quick to scan. */
+private val ModeGroups = listOf(
+    R.string.sec_measure to listOf(MeasureMode.LINE, MeasureMode.HEIGHT, MeasureMode.DISTANCE, MeasureMode.ANGLE, MeasureMode.PATH),
+    R.string.sec_room to listOf(MeasureMode.RECTANGLE, MeasureMode.AREA, MeasureMode.CIRCLE, MeasureMode.VOLUME),
+    R.string.sec_home to listOf(MeasureMode.HANG, MeasureMode.FIT),
+    R.string.sec_outdoors to listOf(MeasureMode.FAR)
+)
+
+/** Most recently picked modes, newest first (kept across launches). */
+object RecentModes {
+    private const val PREFS = "measurear"
+    private const val KEY = "recent_modes"
+
+    fun get(context: android.content.Context): List<MeasureMode> =
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getString(KEY, "").orEmpty()
+            .split(',').mapNotNull { name -> MeasureMode.values().firstOrNull { it.name == name && it.inPicker } }
+
+    fun push(context: android.content.Context, mode: MeasureMode) {
+        val list = (listOf(mode) + get(context).filter { it != mode }).take(4)
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit()
+            .putString(KEY, list.joinToString(",") { it.name }).apply()
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text.uppercase(),
+        color = HudTeal.copy(alpha = 0.85f),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 8.dp)
+    )
+}
+
+/** A recently used mode as a small chip. */
+@Composable
+private fun RecentChip(mode: MeasureMode, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardColor)
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ModeIllustration(mode, Modifier.size(24.dp), compact = true)
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(mode.titleRes()), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -136,14 +195,32 @@ fun ModePickerSheet(
                     modifier = Modifier.padding(start = 4.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-                MeasureMode.values().filter { it.inPicker }.chunked(3).forEach { row ->
-                    // Cards in a row share the tallest one's height
-                    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { mode ->
-                            ModeCard(mode, selected = mode == current, onClick = { onSelect(mode) }, modifier = Modifier.weight(1f).fillMaxHeight())
-                        }
+                val context = LocalContext.current
+                val pick = { mode: MeasureMode ->
+                    RecentModes.push(context, mode)
+                    onSelect(mode)
+                }
+                // The last few modes used (other than the current one), one tap away
+                val recent = remember(visible) { RecentModes.get(context).filter { it != current }.take(3) }
+                if (recent.isNotEmpty()) {
+                    SectionTitle(stringResource(R.string.sec_recent))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        recent.forEach { mode -> RecentChip(mode, onClick = { pick(mode) }) }
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(6.dp))
+                }
+                ModeGroups.forEach { (title, modes) ->
+                    SectionTitle(stringResource(title))
+                    modes.chunked(3).forEach { row ->
+                        // Cards in a row share the tallest one's height; a short row keeps card widths
+                        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { mode ->
+                                ModeCard(mode, selected = mode == current, onClick = { pick(mode) }, modifier = Modifier.weight(1f).fillMaxHeight())
+                            }
+                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
                 }
                 // Accuracy: calibrate against a card
                 Row(
@@ -379,7 +456,8 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
     val step = when {
         // A finished shape: name what the big number is ("HEIGHT", "AREA")
         draftCount == 0 && result != null && !result.isLive && result.values.isNotEmpty() -> LocalContext.current.resultLabel(result.values.first().label)
-        draftCount == 0 -> stringResource(mode.howToRes())
+        // Nothing placed yet: the coach line above already says how
+        draftCount == 0 -> null
         needed != null -> stringResource(R.string.step_point_of, draftCount + 1, needed)
         draftCount < mode.minPoints -> {
             val more = mode.minPoints - draftCount
@@ -388,16 +466,20 @@ fun ResultCard(result: ShapeResultUi?, mode: MeasureMode, draftCount: Int, unit:
         mode == MeasureMode.AREA -> stringResource(R.string.step_area, draftCount)
         else -> stringResource(R.string.step_points, draftCount)
     }
+    val finished = draftCount == 0 && result != null && !result.isLive && result.values.isNotEmpty()
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            step.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            letterSpacing = 1.2.sp,
-            color = HudAmber,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            modifier = Modifier.padding(horizontal = 24.dp)
-        )
+        if (step != null) {
+            // A finished shape's label ("AREA") in small caps; progress ("Point 2 of 3") as a sentence
+            Text(
+                if (finished) step.uppercase() else step,
+                style = MaterialTheme.typography.labelMedium,
+                letterSpacing = if (finished) 1.2.sp else 0.sp,
+                color = if (finished) HudAmber else Color.White.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+        }
         val values = result?.values.orEmpty()
         val primary = values.firstOrNull()
         Text(
@@ -573,11 +655,12 @@ fun CalibrationDialog(
 }
 
 /**
- * Live precision of the next point: "± 1.8 cm" with a 3-bar signal, teal on a detected
- * surface up close, fewer bars farther away, amber for estimates.
+ * How precise the next point would be, in words with a 3-bar signal: Good / OK / Rough on a
+ * detected surface, Estimate (amber) off it. Tap to see the exact "± 1.8 cm" instead.
  */
 @Composable
 fun AccuracyMeter(error: Float, onSurface: Boolean, unit: MeasureUnit) {
+    var exact by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val bars = when {
         !onSurface -> 1
         error <= 0.02f -> 3
@@ -585,14 +668,20 @@ fun AccuracyMeter(error: Float, onSurface: Boolean, unit: MeasureUnit) {
         else -> 1
     }
     val color = if (onSurface) HudTeal else HudAmber
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "± " + com.jhani.measurear.measurement.formatLength(error, unit),
-            color = color,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(Modifier.width(6.dp))
+    val word = when {
+        !onSurface -> stringResource(R.string.acc_estimate)
+        bars == 3 -> stringResource(R.string.acc_good)
+        bars == 2 -> stringResource(R.string.acc_ok)
+        else -> stringResource(R.string.acc_rough)
+    }
+    val description = stringResource(R.string.cd_accuracy)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { exact = !exact }
+            .semantics { contentDescription = description },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             (1..3).forEach { i ->
                 Box(
@@ -603,6 +692,13 @@ fun AccuracyMeter(error: Float, onSurface: Boolean, unit: MeasureUnit) {
                 )
             }
         }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            if (exact) "± " + com.jhani.measurear.measurement.formatLength(error, unit) else word,
+            color = color,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -632,7 +728,7 @@ fun FitControls(spec: com.jhani.measurear.measurement.BoxSpec, unit: MeasureUnit
 private fun FitButton(label: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(38.dp)
+            .size(44.dp)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .background(Color.Black.copy(alpha = 0.55f))
             .border(1.dp, HudTeal.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape)

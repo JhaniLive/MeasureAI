@@ -1,5 +1,7 @@
 package com.jhani.measurear.presentation
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -139,6 +141,9 @@ fun ARScreen(
         }
     }
     var showPhoneHeight by remember { mutableStateOf(false) }
+    // Where the last screen tap was (and when), so a point placed by it pops out there
+    var lastTap by remember { mutableStateOf<Pair<Offset, Long>?>(null) }
+    val view = androidx.compose.ui.platform.LocalView.current
     // Step-by-step guide for the current screen (the ? button); opens by itself the first time
     var helpTopic by remember { mutableStateOf<String?>(null) }
     var showLanguage by remember { mutableStateOf(false) }
@@ -262,6 +267,9 @@ fun ARScreen(
     // Only auto-prompt for the camera once; the permission dialog itself pauses/resumes the
     // activity, so prompting on every ON_RESUME would loop forever after a denial.
     var permissionPrompted by remember { mutableStateOf(false) }
+    // First launch: the welcome pages come before the camera permission prompt
+    var showWelcome by remember { mutableStateOf(!WelcomePrefs.isDone(context)) }
+    val welcomeShowing by rememberUpdatedState(showWelcome)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -275,7 +283,7 @@ fun ARScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
-                    if (activity != null) {
+                    if (activity != null && !welcomeShowing) {
                         if (currentTool == Tool.LEVEL && sessionManager.hasCameraPermission()) {
                             // Camera stays off while the Level tool is open
                         } else if (sessionManager.hasCameraPermission() || permissionPrompted) {
@@ -302,6 +310,22 @@ fun ARScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             sessionManager.onDestroy()
         }
+    }
+
+    if (showWelcome) {
+        WelcomeScreen(onDone = {
+            WelcomePrefs.markDone(context)
+            showWelcome = false
+            if (activity != null) {
+                if (sessionManager.hasCameraPermission()) {
+                    sessionManager.onResume(activity)
+                } else {
+                    permissionPrompted = true
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                }
+            }
+        })
+        return
     }
 
     val screenTopic = if (tool == Tool.MEASURE) HelpTopic.of(mode) else tool.name
@@ -366,11 +390,50 @@ fun ARScreen(
                     ui = ui,
                     unit = unit,
                     onLineTap = { selectedLine = it },
-                    onScreenTap = { x, y -> sessionManager.requestAction(MeasureAction.AddPointAt(x, y)) },
+                    onScreenTap = { x, y ->
+                        lastTap = Offset(x, y) to System.currentTimeMillis()
+                        sessionManager.requestAction(MeasureAction.AddPointAt(x, y))
+                    },
                     onDragStart = { x, y -> sessionManager.requestAction(MeasureAction.DragStart(x, y)) },
                     onDrag = { x, y -> sessionManager.requestAction(MeasureAction.DragMove(x, y)) },
                     onDragEnd = { sessionManager.requestAction(MeasureAction.DragEnd) }
                 )
+
+                // A point placed: a short vibration and a teal ring popping out where it landed
+                // (the tap, or the crosshair in the middle for STAMP); a light tick on a snap
+                val placedKey = Triple(ui.summaries.size, ui.draftCount, ui.hasPendingPoint)
+                var lastPlacedKey by remember { mutableStateOf(placedKey) }
+                val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+                var popAt by remember { mutableStateOf<Offset?>(null) }
+                LaunchedEffect(placedKey) {
+                    val (done, draft, pending) = placedKey
+                    val (lastDone, lastDraft, lastPending) = lastPlacedKey
+                    lastPlacedKey = placedKey
+                    val added = done > lastDone || draft > lastDraft || (pending && !lastPending)
+                    if (!added) return@LaunchedEffect
+                    view.performHapticFeedback(
+                        if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
+                        else android.view.HapticFeedbackConstants.VIRTUAL_KEY
+                    )
+                    popAt = lastTap?.takeIf { System.currentTimeMillis() - it.second < 600 }?.first
+                    pop.snapTo(0f)
+                    pop.animateTo(1f, androidx.compose.animation.core.tween(450))
+                }
+                LaunchedEffect(ui.reticle) {
+                    if (ui.reticle == ReticleState.SNAPPED) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                }
+                if (pop.value < 1f) {
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        val at = popAt ?: center
+                        val v = pop.value
+                        drawCircle(
+                            HudTeal.copy(alpha = (1f - v) * 0.9f),
+                            radius = (10f + 30f * v) * density,
+                            center = at,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke((3f - 2f * v) * density)
+                        )
+                    }
+                }
 
                 // Height of the bottom controls, so the transient hint can sit above them
                 var controlsHeight by remember { mutableStateOf(0) }
@@ -381,7 +444,7 @@ fun ARScreen(
                     OnboardingHint(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(top = 260.dp)
+                            .padding(top = 230.dp)
                     )
                 }
 
@@ -441,7 +504,6 @@ fun ARScreen(
                         debugOn = !debugOn
                         hint = context.getString(if (debugOn) R.string.hint_debug_on else R.string.hint_debug_off)
                     },
-                    guidance = shownGuidance,
                     targetMeters = ui.targetMeters,
                     unit = unit,
                     onUnitChange = { unit = it },
@@ -455,6 +517,7 @@ fun ARScreen(
                         magnifierOn = !magnifierOn
                         hint = context.getString(if (magnifierOn) R.string.hint_magnifier_on else R.string.hint_magnifier_off)
                     },
+                    gridOcclusion = gridOcclusion,
                     onToggleOcclusion = {
                         gridOcclusion = !gridOcclusion
                         hint = context.getString(if (gridOcclusion) R.string.hint_occlusion_on else R.string.hint_occlusion_off)
@@ -465,34 +528,17 @@ fun ARScreen(
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
 
-                // Transient hint (e.g. + pressed while not aiming at a surface)
-                hint?.let { message ->
-                    // Just above the bottom controls (taller with a mode's own controls),
-                    // clear of the crosshair and measurements
-                    // While scanning the guide has that space, so the hint goes under the top bar
-                    val aboveControls = with(LocalDensity.current) { controlsHeight.toDp() } - 16.dp
-                    Surface(
-                        modifier = if (scanning) Modifier
-                            .align(Alignment.TopCenter)
-                            .statusBarsPadding()
-                            .padding(top = 190.dp)
-                            .padding(horizontal = 32.dp)
-                        else Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = aboveControls.coerceAtLeast(250.dp))
-                            .padding(horizontal = 32.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.Black.copy(alpha = 0.7f)
-                    ) {
-                        Text(
-                            text = message,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                // The one place instructions appear, just above the bottom controls: what to do
+                // now, or briefly a tip (e.g. + pressed while not aiming at a surface)
+                val coachText = hint ?: if (scanning) context.getString(R.string.onboarding).replace("\n", " ") else shownGuidance
+                CoachLine(
+                    text = coachText,
+                    isTip = hint != null,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = (with(LocalDensity.current) { controlsHeight.toDp() } - 12.dp).coerceAtLeast(0.dp))
+                        .padding(horizontal = 24.dp)
+                )
 
                 MeasureControls(
                     hangSpec = hangSpec,
@@ -742,8 +788,9 @@ fun ARScreen(
 }
 
 /**
- * Top HUD: app title with live guidance on the left, camera-to-target distance and the unit
- * toggle on the right.
+ * Top bar, kept light so the camera stays visible: the mode and its guide on the left; save,
+ * history and a ⋯ menu (flash, grid, magnifier, units) on the right; under them the distance
+ * to the aim point and how accurate a point placed now would be.
  */
 @Composable
 private fun HudTopBar(
@@ -752,7 +799,6 @@ private fun HudTopBar(
     mode: MeasureMode,
     onModeClick: () -> Unit,
     onToggleDebug: () -> Unit,
-    guidance: String,
     targetMeters: Float?,
     unit: MeasureUnit,
     onUnitChange: (MeasureUnit) -> Unit,
@@ -763,6 +809,7 @@ private fun HudTopBar(
     onToggleGrid: () -> Unit,
     magnifierOn: Boolean,
     onToggleMagnifier: () -> Unit,
+    gridOcclusion: Boolean,
     onToggleOcclusion: () -> Unit,
     onCapture: () -> Unit,
     onHistory: () -> Unit,
@@ -772,85 +819,138 @@ private fun HudTopBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
+            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)))
             .statusBarsPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)
     ) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(modifier = Modifier.weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 // Current mode; tap for the mode picker. Hidden developer switch: long-press
                 // toggles the debug view
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.combinedClickable(onClick = onModeClick, onLongClick = onToggleDebug)) {
-                        ModeChip(mode = mode, onClick = onModeClick)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    HelpButton(onClick = onHelp)
+                Box(
+                    Modifier
+                        .weight(1f, fill = false)
+                        .combinedClickable(onClick = onModeClick, onLongClick = onToggleDebug)
+                ) {
+                    ModeChip(mode = mode, onClick = onModeClick)
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                AnimatedContent(
-                    targetState = guidance,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "guidance_animation"
-                ) { text ->
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = HudTeal
-                    )
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                HelpButton(onClick = onHelp)
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = stringResource(R.string.target_dist),
-                    style = MaterialTheme.typography.labelSmall,
-                    letterSpacing = 1.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = targetMeters?.let { formatRange(it, unit) } ?: "—",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-                // How precise a point placed right now would be
-                if (targetMeters != null && aimError != null) {
-                    AccuracyMeter(error = aimError, onSurface = aimOnSurface, unit = unit)
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.align(Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (hasFlash) {
-                TopIconButton(
-                    icon = if (torchOn) R.drawable.ic_flash_on else R.drawable.ic_flash_off,
-                    description = stringResource(if (torchOn) R.string.cd_flash_off else R.string.cd_flash_on),
-                    active = torchOn,
-                    onClick = onToggleTorch
-                )
-            }
-            TopIconButton(
-                icon = R.drawable.ic_grid,
-                description = stringResource(if (showGrid) R.string.cd_grid_hide else R.string.cd_grid_show),
-                active = showGrid,
-                onClick = onToggleGrid,
-                onLongClick = onToggleOcclusion
-            )
-            TopIconButton(
-                icon = R.drawable.ic_zoom,
-                description = stringResource(if (magnifierOn) R.string.cd_magnifier_off else R.string.cd_magnifier_on),
-                active = magnifierOn,
-                onClick = onToggleMagnifier
-            )
+            Spacer(modifier = Modifier.width(8.dp))
             TopIconButton(R.drawable.ic_camera, stringResource(R.string.cd_save_screenshot), onClick = onCapture)
+            Spacer(modifier = Modifier.width(8.dp))
             TopIconButton(R.drawable.ic_history, stringResource(R.string.saved_measurements), onClick = onHistory)
-            Spacer(modifier = Modifier.width(4.dp))
-            UnitToggle(unit = unit, onUnitChange = onUnitChange)
+            Spacer(modifier = Modifier.width(8.dp))
+            MoreMenu(
+                unit = unit, onUnitChange = onUnitChange,
+                hasFlash = hasFlash, torchOn = torchOn, onToggleTorch = onToggleTorch,
+                showGrid = showGrid, onToggleGrid = onToggleGrid,
+                magnifierOn = magnifierOn, onToggleMagnifier = onToggleMagnifier,
+                gridOcclusion = gridOcclusion, onToggleOcclusion = onToggleOcclusion
+            )
+        }
+        if (targetMeters != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            AimChip(
+                meters = targetMeters,
+                error = aimError,
+                onSurface = aimOnSurface,
+                unit = unit,
+                modifier = Modifier.align(Alignment.End)
+            )
+        }
+    }
+}
+
+/** The ⋯ menu: the less-used switches, so the top bar stays uncluttered. */
+@Composable
+private fun MoreMenu(
+    unit: MeasureUnit,
+    onUnitChange: (MeasureUnit) -> Unit,
+    hasFlash: Boolean,
+    torchOn: Boolean,
+    onToggleTorch: () -> Unit,
+    showGrid: Boolean,
+    onToggleGrid: () -> Unit,
+    magnifierOn: Boolean,
+    onToggleMagnifier: () -> Unit,
+    gridOcclusion: Boolean,
+    onToggleOcclusion: () -> Unit
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TopIconButton(R.drawable.ic_more, stringResource(R.string.cd_more), active = open, onClick = { open = true })
+        androidx.compose.material3.DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = Color(0xFF121A1A),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            @Composable
+            fun item(@DrawableRes icon: Int?, label: String, on: Boolean?, onClick: () -> Unit) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(label, color = Color.White) },
+                    // Rows without an icon keep the same indent
+                    leadingIcon = {
+                        if (icon != null) Icon(painterResource(icon), contentDescription = null, tint = if (on == true) HudTeal else Color.White, modifier = Modifier.size(20.dp))
+                        else Spacer(Modifier.size(20.dp))
+                    },
+                    trailingIcon = on?.let {
+                        {
+                            androidx.compose.material3.Switch(
+                                checked = it,
+                                onCheckedChange = null,
+                                modifier = Modifier.scale(0.8f),
+                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedThumbColor = Color.Black,
+                                    checkedTrackColor = HudTeal,
+                                    uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
+                                    uncheckedTrackColor = Color.White.copy(alpha = 0.12f),
+                                    uncheckedBorderColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    },
+                    onClick = onClick
+                )
+            }
+            if (hasFlash) {
+                item(if (torchOn) R.drawable.ic_flash_on else R.drawable.ic_flash_off, stringResource(R.string.flashlight), torchOn, onToggleTorch)
+            }
+            item(R.drawable.ic_grid, stringResource(R.string.surface_grid), showGrid, onToggleGrid)
+            if (showGrid) item(null, stringResource(R.string.menu_occlusion), gridOcclusion, onToggleOcclusion)
+            item(R.drawable.ic_zoom, stringResource(R.string.magnifier), magnifierOn, onToggleMagnifier)
+            androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(stringResource(R.string.menu_units), color = Color.White) },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_straighten), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp)) },
+                trailingIcon = { UnitToggle(unit = unit, onUnitChange = onUnitChange) },
+                onClick = { onUnitChange(if (unit == MeasureUnit.METRIC) MeasureUnit.IMPERIAL else MeasureUnit.METRIC) }
+            )
+        }
+    }
+}
+
+/** Distance to the aim point, with the accuracy of a point placed there now. */
+@Composable
+private fun AimChip(meters: Float, error: Float?, onSurface: Boolean, unit: MeasureUnit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.Black.copy(alpha = 0.5f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = formatRange(meters, unit),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White
+        )
+        if (error != null) {
+            Spacer(modifier = Modifier.width(10.dp))
+            AccuracyMeter(error = error, onSurface = onSurface, unit = unit)
         }
     }
 }
@@ -866,7 +966,7 @@ private fun TopIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(44.dp)
             .clip(CircleShape)
             .background(if (active) HudTeal else Color.Black.copy(alpha = 0.55f))
             .border(1.dp, HudTeal.copy(alpha = 0.5f), CircleShape)
@@ -877,7 +977,30 @@ private fun TopIconButton(
             painter = painterResource(icon),
             contentDescription = description,
             tint = if (active) Color.Black else Color.White,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/** The single instruction line: dark pill so it reads on any background; amber edge for a tip. */
+@Composable
+private fun CoachLine(text: String, isTip: Boolean, modifier: Modifier = Modifier) {
+    AnimatedContent(
+        targetState = text to isTip,
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        label = "coach",
+        modifier = modifier
+    ) { (message, tip) ->
+        Text(
+            text = message,
+            modifier = Modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.Black.copy(alpha = 0.62f))
+                .border(1.dp, if (tip) HudAmber.copy(alpha = 0.8f) else HudTeal.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 16.dp, vertical = 9.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -950,7 +1073,9 @@ private fun MeasureControls(
             .padding(top = 32.dp, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (mode == MeasureMode.LINE) {
+        if (mode == MeasureMode.LINE && scanning) {
+            // Room for the scanning guide
+        } else if (mode == MeasureMode.LINE) {
             // Alignment badge, e.g. "VERTICAL" while measuring a height
             Text(
                 text = snapAxis?.label?.uppercase() ?: " ",

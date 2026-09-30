@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="acc_estimate">అంచనా</string>
+    <string name="acc_good">బాగుంది</string>
+    <string name="acc_ok">పర్వాలేదు</string>
+    <string name="acc_rough">స్థూలంగా</string>
     <string name="all">అన్నీ</string>
     <string name="apply">వర్తింపజేయండి</string>
     <string name="box_area">%1$s m²/డబ్బా</string>
@@ -26,6 +30,7 @@
     <string name="calibration">క్యాలిబ్రేషన్</string>
     <string name="can_size">%1$d లీటర్ డబ్బా</string>
     <string name="cancel">రద్దు చేయండి</string>
+    <string name="cd_accuracy">తదుపరి బిందువు ఖచ్చితత్వం — ఖచ్చితమైన తేడా కోసం ట్యాప్ చేయండి</string>
     <string name="cd_flash_off">ఫ్లాష్‌లైట్ ఆఫ్ చేయండి</string>
     <string name="cd_flash_on">ఫ్లాష్‌లైట్ ఆన్ చేయండి</string>
     <string name="cd_grid_hide">ఉపరితల గ్రిడ్ దాచండి</string>
@@ -33,6 +38,7 @@
     <string name="cd_help">సహాయం</string>
     <string name="cd_magnifier_off">మాగ్నిఫైయర్ ఆఫ్ చేయండి</string>
     <string name="cd_magnifier_on">మాగ్నిఫైయర్ ఆన్ చేయండి</string>
+    <string name="cd_more">మరిన్ని ఎంపికలు</string>
     <string name="cd_save_screenshot">స్క్రీన్‌షాట్ సేవ్ చేయండి</string>
     <string name="clear">క్లియర్</string>
     <string name="clear_all">అన్నీ క్లియర్ చేయండి</string>
@@ -68,6 +74,7 @@
     <string name="fit_title">మీరు ఏమి సరిపెట్టాలనుకుంటున్నారు?</string>
     <string name="fit_use_mine">నా పరిమాణం వాడండి</string>
     <string name="flash_unavailable">ఫ్లాష్‌లైట్ ఇప్పుడు అందుబాటులో లేదు</string>
+    <string name="flashlight">ఫ్లాష్‌లైట్</string>
     <string name="flooring_detail">%1$s m² కవర్ చేస్తుంది, కోతలకు 8%% అదనం సహా</string>
     <string name="ground_found">✓ నేల కనుగొనబడింది · ఫోన్ %1$s ఎత్తులో</string>
     <string name="guide_approx">ఇక్కడ సుమారుగా (≈) — టీల్ చుక్కలపై ఖచ్చితంగా ఉంటుంది</string>
@@ -257,10 +264,13 @@
     <string name="loader_starting">కెమెరా ప్రారంభమవుతోంది</string>
     <string name="lock_bearing">దిశను లాక్ చేయండి</string>
     <string name="magnetic_north">అయస్కాంత ఉత్తరం</string>
+    <string name="magnifier">మాగ్నిఫైయర్</string>
     <string name="make_level">సమతలం చేయండి</string>
     <string name="make_vertical">నిలువుగా చేయండి</string>
     <string name="materials">సామగ్రి</string>
     <string name="materials_for">%1$s కోసం</string>
+    <string name="menu_occlusion">వస్తువుల వెనుక చుక్కలను దాచండి</string>
+    <string name="menu_units">యూనిట్లు</string>
     <string name="mode_angle">కోణం</string>
     <string name="mode_area">వైశాల్యం</string>
     <string name="mode_calibrate">క్యాలిబ్రేట్</string>
@@ -308,6 +318,11 @@
     <string name="saved">సేవ్ అయింది</string>
     <string name="saved_measurements">సేవ్ చేసిన కొలతలు</string>
     <string name="saved_to_project">కొత్త కొలతలు \"%1$s\" లో సేవ్ అవుతాయి</string>
+    <string name="sec_home">ఇల్లు</string>
+    <string name="sec_measure">కొలవండి</string>
+    <string name="sec_outdoors">బయట</string>
+    <string name="sec_recent">ఇటీవలివి</string>
+    <string name="sec_room">గది &amp; నేల</string>
     <string name="share">షేర్ చేయండి</string>
     <string name="share_measurement">కొలతను షేర్ చేయండి</string>
     <string name="share_report">నివేదికను షేర్ చేయండి</string>
@@ -322,6 +337,7 @@
     <string name="step_more">బిందువు %1$d — ఇంకా %2$d మిగిలి ఉన్నాయి</string>
     <string name="step_point_of">బిందువు %1$d / %2$d</string>
     <string name="step_points">%1$d బిందువులు · ముగించడానికి \"పూర్తి\" ట్యాప్ చేయండి</string>
+    <string name="surface_grid">ఉపరితల చుక్కలు</string>
     <string name="tab_compass">దిక్సూచి</string>
     <string name="tab_flooring">ఫ్లోరింగ్</string>
     <string name="tab_level">లెవెల్</string>
@@ -345,5 +361,13 @@
     <string name="unlock">అన్‌లాక్</string>
     <string name="vertical">నిలువు</string>
     <string name="vertical_line">నిలువు రేఖ</string>
+    <string name="welcome_1_b">నేల, టేబుల్ లేదా గోడ వైపు చూపి ట్యాప్ చేసి పొడవులు, ఎత్తులు, కోణాలు కొలవండి — టేప్ అవసరం లేదు.</string>
+    <string name="welcome_1_t">కెమెరాతో కొలవండి</string>
+    <string name="welcome_2_b">గదుల వైశాల్యం, ఫ్లోర్ ప్లాన్‌లు పొందండి, పెయింట్, టైల్స్ లెక్కించండి, చిత్రాలను సమతలంగా వేలాడదీయండి, సోఫా సరిపోతుందో చూడండి.</string>
+    <string name="welcome_2_t">గదులు, గోడలు, ఫర్నిచర్</string>
+    <string name="welcome_3_b">MeasureAR కెమెరాను ఉపరితలాలను చూడటానికి మాత్రమే వాడుతుంది. ఏదీ అప్‌లోడ్ కాదు — మీ కొలతలు మీ ఫోన్‌లోనే ఉంటాయి.</string>
+    <string name="welcome_3_t">కెమెరా అనుమతి</string>
+    <string name="welcome_skip">దాటవేయండి</string>
+    <string name="welcome_start">కెమెరాను అనుమతించి ప్రారంభించండి</string>
     <string name="windows">కిటికీలు</string>
 </resources>

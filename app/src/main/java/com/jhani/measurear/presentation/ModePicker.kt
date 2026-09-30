@@ -734,9 +734,11 @@ fun FitSizeDialog(
 /** Hang pictures: the arrangement summary; tap to change it. */
 @Composable
 fun HangControls(spec: com.jhani.measurear.measurement.HangSpec, unit: MeasureUnit, onEdit: () -> Unit) {
-    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
+    // Whole cm / inches, one unit: "3 frames · 40 × 50 cm · gap 8 cm"
+    val (factor, label) = if (unit == MeasureUnit.METRIC) 100f to "cm" else 39.37008f to "in"
+    fun whole(m: Float) = Math.round(m * factor).toString()
     Text(
-        pluralStringResource(R.plurals.hang_summary, spec.count, spec.count, fmt(spec.width), fmt(spec.height), fmt(spec.gap)) + "  ▾",
+        pluralStringResource(R.plurals.hang_summary, spec.count, spec.count, whole(spec.width), whole(spec.height) + " " + label, whole(spec.gap) + " " + label) + "  ▾",
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.55f))
@@ -785,7 +787,9 @@ fun HangDialog(
                             androidx.compose.material3.OutlinedTextField(
                                 value = values[i],
                                 onValueChange = { values[i] = it.filter { c -> c.isDigit() || c == '.' }.take(6) },
-                                label = { Text("$label ($unitLabel)", fontSize = 11.sp) },
+                                // Unit as a suffix keeps the labels short enough for one line
+                                label = { Text(label, fontSize = 11.sp, maxLines = 1) },
+                                suffix = { Text(unitLabel, color = Color.White.copy(alpha = 0.6f)) },
                                 singleLine = true,
                                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal

@@ -439,9 +439,15 @@ fun ARScreen(
                 hint?.let { message ->
                     // Just above the bottom controls (taller with a mode's own controls),
                     // clear of the crosshair and measurements
+                    // While scanning the guide has that space, so the hint goes under the top bar
                     val aboveControls = with(LocalDensity.current) { controlsHeight.toDp() } - 16.dp
                     Surface(
-                        modifier = Modifier
+                        modifier = if (scanning) Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(top = 190.dp)
+                            .padding(horizontal = 32.dp)
+                        else Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = aboveControls.coerceAtLeast(250.dp))
                             .padding(horizontal = 32.dp),

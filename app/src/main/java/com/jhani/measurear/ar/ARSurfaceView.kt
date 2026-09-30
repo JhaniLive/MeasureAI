@@ -274,6 +274,12 @@ class ARSurfaceView(
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        // The session may be closed from the main thread (activity recreated, e.g. a language
+        // change); holding the lock for the whole frame means it is never closed mid-update.
+        synchronized(sessionManager.sessionLock) { drawFrame() }
+    }
+
+    private fun drawFrame() {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         val tFrame = System.nanoTime()
 

@@ -109,6 +109,9 @@ class ARSessionManager(private val context: Context) {
     var session: Session? = null
         private set
 
+    /** Held by the render thread for each frame; closing the session takes it too. */
+    val sessionLock = Any()
+
     private var installRequested = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -430,8 +433,10 @@ class ARSessionManager(private val context: Context) {
         mainHandler.removeCallbacksAndMessages(null)
         pendingActions.clear()
         clearAll()
-        session?.close()
-        session = null
+        synchronized(sessionLock) {
+            session?.close()
+            session = null
+        }
         _uiState.value = MeasureUiState()
         _sessionState.value = ARSessionState.Idle
     }

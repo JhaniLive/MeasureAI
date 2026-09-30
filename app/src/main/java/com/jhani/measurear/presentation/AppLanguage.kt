@@ -2,6 +2,7 @@ package com.jhani.measurear.presentation
 
 import android.content.Context
 import android.content.res.Configuration
+import android.content.res.Resources
 import java.util.Locale
 
 /**
@@ -31,7 +32,12 @@ enum class AppLanguage(val code: String?, val nativeName: String) {
 
         /** [base] with the saved language applied (unchanged for System default). */
         fun wrap(base: Context): Context {
-            val code = saved(base).code ?: return base
+            val code = saved(base).code
+            if (code == null) {
+                // Undo an earlier in-app choice made in this process
+                Locale.setDefault(Resources.getSystem().configuration.locales[0])
+                return base
+            }
             val locale = Locale(code)
             Locale.setDefault(locale)
             val config = Configuration(base.resources.configuration)

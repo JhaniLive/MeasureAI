@@ -3,6 +3,7 @@ package com.jhani.measurear
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -10,8 +11,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import com.jhani.measurear.measurement.MeasureMode
 import com.jhani.measurear.presentation.ARScreen
 import com.jhani.measurear.presentation.AppLanguage
@@ -52,13 +56,20 @@ class MainActivity : ComponentActivity() {
         // Keep the display awake while measuring
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         readMode(intent)
+        // Take the direction from the language's configuration: after a language change
+        // recreates the activity, the window can keep the old direction (Urdu → English
+        // stayed right-to-left)
+        val direction = if (resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+            LayoutDirection.Rtl else LayoutDirection.Ltr
         setContent {
-            MeasureARTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    ARScreen(
-                        requestedMode = requestedMode.value,
-                        onModeRequestHandled = { requestedMode.value = null }
-                    )
+            CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                MeasureARTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        ARScreen(
+                            requestedMode = requestedMode.value,
+                            onModeRequestHandled = { requestedMode.value = null }
+                        )
+                    }
                 }
             }
         }

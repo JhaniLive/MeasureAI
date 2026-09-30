@@ -16,10 +16,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jhani.measurear.measurement.MeasureMode
@@ -134,9 +137,10 @@ fun ModePickerSheet(
                 )
                 Spacer(Modifier.height(12.dp))
                 MeasureMode.values().filter { it.inPicker }.chunked(3).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Cards in a row share the tallest one's height
+                    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEach { mode ->
-                            ModeCard(mode, selected = mode == current, onClick = { onSelect(mode) }, modifier = Modifier.weight(1f))
+                            ModeCard(mode, selected = mode == current, onClick = { onSelect(mode) }, modifier = Modifier.weight(1f).fillMaxHeight())
                         }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -160,7 +164,8 @@ fun ModePickerSheet(
                             if (scale == 1f) stringResource(R.string.calib_button_sub)
                             else stringResource(R.string.calib_button_done, "%+.1f%%".format((scale - 1f) * 100)),
                             color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp
                         )
                     }
                     Text("›", color = HudTeal, fontSize = 22.sp)
@@ -189,11 +194,12 @@ fun ModePickerSheet(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     androidx.compose.ui.text.buildAnnotatedString {
-                        append(stringResource(R.string.built_with))
+                        // Resources drop leading/trailing spaces, so they're added here
+                        append(stringResource(R.string.built_with).trim() + " ")
                         pushStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFFFF5A7A)))
                         append("♥")
                         pop()
-                        append(stringResource(R.string.built_by))
+                        append(" " + stringResource(R.string.built_by).trim() + " ")
                         pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold))
                         append("Jhani")
                         pop()
@@ -227,8 +233,9 @@ private fun ModeCard(mode: MeasureMode, selected: Boolean, onClick: () -> Unit, 
             fontSize = 10.sp,
             lineHeight = 12.sp,
             textAlign = TextAlign.Center,
-            maxLines = 3,
-            modifier = Modifier.height(34.dp)
+            // Sized by the text (large system fonts need more room); long ones end in …
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

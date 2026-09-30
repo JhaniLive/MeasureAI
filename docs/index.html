@@ -29,8 +29,25 @@
   .card { background: var(--card); border: 1px solid rgba(29,233,208,.18); border-radius: 16px; padding: 16px 18px; }
   .card b { display: block; margin-bottom: 2px; }
   .card span { color: var(--muted); font-size: 14px; }
-  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-  .shots img { width: 100%; border-radius: 18px; }
+  /* Screenshots: one swipeable row that snaps to each shot, with arrows and dots */
+  .carousel { position: relative; }
+  .shots { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth;
+           padding: 4px 2px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .shots::-webkit-scrollbar { display: none; }
+  .shots img { flex: 0 0 auto; width: calc((100% - 32px) / 3); aspect-ratio: 1 / 2; object-fit: cover;
+               border-radius: 18px; scroll-snap-align: start; }
+  .arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%;
+           border: 1px solid rgba(29,233,208,.5); background: rgba(5,15,14,.85); color: var(--teal); font-size: 22px;
+           line-height: 1; cursor: pointer; display: grid; place-items: center; }
+  .arrow:disabled { opacity: 0; pointer-events: none; }
+  .arrow.prev { left: -22px; } .arrow.next { right: -22px; }
+  .dots { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+  .dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 4px; background: rgba(230,242,240,.25); cursor: pointer; transition: width .2s; }
+  .dots button.on { width: 22px; background: var(--teal); }
+  @media (max-width: 640px) {
+    .shots img { width: 72%; scroll-snap-align: center; }
+    .arrow { display: none; }
+  }
   ol { padding-left: 22px; } li { margin: 6px 0; }
   .note { background: var(--card); border-left: 3px solid var(--teal); border-radius: 8px; padding: 12px 16px; color: var(--muted); }
   footer { text-align: center; color: var(--muted); font-size: 14px; padding: 24px 16px 40px; }
@@ -84,12 +101,46 @@
   </div>
 
   <h2>Screenshots</h2>
-  <div class="shots">
-    <img src="shot-welcome.png" alt="Welcome screen: measure with your camera">
-    <img src="shot-modes.png" alt="Mode picker with twelve measuring modes in groups">
-    <img src="shot-help.png" alt="Illustrated step-by-step help guide">
-    <img src="shot-level.png" alt="Bubble level reading 0 degrees">
+  <div class="carousel">
+    <div class="shots" id="shots">
+      <img src="shot-welcome.png?v=1.2.1" alt="Welcome screen: measure with your camera">
+      <img src="shot-modes.png?v=1.2.1" alt="Mode picker with twelve measuring modes in groups">
+      <img src="shot-help.png?v=1.2.1" alt="Illustrated step-by-step help guide">
+      <img src="shot-level.png?v=1.2.1" alt="Bubble level reading 0 degrees">
+      <img src="shot-compass.png?v=1.2.1" alt="Compass showing a heading of 287 degrees west">
+    </div>
+    <button class="arrow prev" aria-label="Previous screenshot">‹</button>
+    <button class="arrow next" aria-label="Next screenshot">›</button>
   </div>
+  <div class="dots" id="dots"></div>
+  <script>
+    (function () {
+      var row = document.getElementById('shots');
+      var shots = row.querySelectorAll('img');
+      var dots = document.getElementById('dots');
+      var prev = document.querySelector('.arrow.prev');
+      var next = document.querySelector('.arrow.next');
+      function step() { return shots[0].getBoundingClientRect().width + 16; }
+      function current() { return Math.round(row.scrollLeft / step()); }
+      shots.forEach(function (_, i) {
+        var b = document.createElement('button');
+        b.setAttribute('aria-label', 'Screenshot ' + (i + 1));
+        b.onclick = function () { row.scrollTo({ left: i * step() }); };
+        dots.appendChild(b);
+      });
+      function update() {
+        var i = current();
+        dots.querySelectorAll('button').forEach(function (b, k) { b.classList.toggle('on', k === i); });
+        prev.disabled = row.scrollLeft < 4;
+        next.disabled = row.scrollLeft + row.clientWidth > row.scrollWidth - 4;
+      }
+      prev.onclick = function () { row.scrollBy({ left: -step() }); };
+      next.onclick = function () { row.scrollBy({ left: step() }); };
+      row.addEventListener('scroll', function () { window.requestAnimationFrame(update); });
+      window.addEventListener('resize', update);
+      update();
+    })();
+  </script>
 
   <h2>How to install</h2>
   <ol>

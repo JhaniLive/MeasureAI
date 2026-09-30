@@ -240,6 +240,12 @@ enum class MeasureUnit { METRIC, IMPERIAL }
 /**
  * Measurement length: centimeters ("28.5 cm") or inches / feet-inches ("11.2 in", "3' 4.5\"").
  */
+/** A box size in one unit, whole cm or inches: "200 × 90 × 85 cm", "79 × 35 × 33 in". */
+fun formatBoxSize(width: Float, depth: Float, height: Float, unit: MeasureUnit): String {
+    val (factor, label) = if (unit == MeasureUnit.METRIC) 100f to "cm" else 39.37008f to "in"
+    return listOf(width, depth, height).joinToString(" × ") { Math.round(it * factor).toString() } + " " + label
+}
+
 fun formatLength(meters: Float, unit: MeasureUnit): String = when (unit) {
     MeasureUnit.METRIC -> if (meters >= 1f) "%.2f m".format(meters) else "%.1f cm".format(meters * 100f)
     MeasureUnit.IMPERIAL -> formatFeetInches(meters)

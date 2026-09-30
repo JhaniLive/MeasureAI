@@ -17,4 +17,8 @@ class FormatTest {
         assertEquals("28.5 cm", formatLength(0.285f, MeasureUnit.METRIC))
         assertEquals("3.60 m", formatLength(3.6f, MeasureUnit.METRIC))
     }
+    @Test fun boxSizeInOneUnit() {
+        assertEquals("200 × 90 × 85 cm", formatBoxSize(2f, 0.9f, 0.85f, MeasureUnit.METRIC))
+        assertEquals("79 × 35 × 33 in", formatBoxSize(2f, 0.9f, 0.85f, MeasureUnit.IMPERIAL))
+    }
 }

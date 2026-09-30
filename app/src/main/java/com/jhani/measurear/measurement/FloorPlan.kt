@@ -16,7 +16,15 @@ object FloorPlan {
      */
     fun flatten(points: List<Vec3>, normal: Vec3?): List<P> {
         if (points.size < 3) return emptyList()
-        val n = normal ?: Geometry.fitNormal(points) ?: Vec3.UP
+        // The outline's own plane: estimated corners needn't lie on the surface that was hit,
+        // and projecting onto that surface shortened edges rising off it (78 cm drawn as 13 cm).
+        // Faced like the surface normal so the plan isn't mirrored.
+        val fitted = Geometry.fitNormal(points)
+        val n = when {
+            fitted == null -> normal ?: Vec3.UP
+            normal != null && (fitted dot normal) < 0f -> fitted * -1f
+            else -> fitted
+        }
         val (u, v) = Geometry.planeBasis(n)
         val o = points[0]
         val flat = points.map { P((it - o) dot u, (it - o) dot v) }

@@ -1,5 +1,8 @@
 package com.jhani.measurear.presentation
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -19,6 +22,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
@@ -79,6 +83,7 @@ fun MeasureOverlay(
 
     // Label rectangles from the last draw, for tap hit-testing
     val labelHits = remember { ArrayList<Pair<Rect, Int>>() }
+    val statusBarBottom = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
 
     Canvas(
         modifier = modifier
@@ -114,13 +119,16 @@ fun MeasureOverlay(
             drawEndpoint(Offset(ui.pendingX, ui.pendingY))
         }
 
-        ui.segments.forEach { segment ->
-            if (!segment.labelled) return@forEach
-            val rect = drawLabel(segment, unit, textMeasurer)
-            if (rect != null && segment.lineIndex >= 0) labelHits.add(rect to segment.lineIndex)
+        // Labels stay out of the status bar (clock and icons)
+        clipRect(top = statusBarBottom) {
+            ui.segments.forEach { segment ->
+                if (!segment.labelled) return@forEach
+                val rect = drawLabel(segment, unit, textMeasurer)
+                if (rect != null && segment.lineIndex >= 0) labelHits.add(rect to segment.lineIndex)
+            }
+            ui.areas.forEach { drawAreaLabel(it, unit, textMeasurer) }
+            ui.sceneLabels.forEach { drawValueLabel(it, unit, textMeasurer) }
         }
-        ui.areas.forEach { drawAreaLabel(it, unit, textMeasurer) }
-        ui.sceneLabels.forEach { drawValueLabel(it, unit, textMeasurer) }
 
         drawOffscreenArrow(ui, unit, textMeasurer)
         if (ui.isTracking && ui.loupeVisible) drawLoupe(ui)

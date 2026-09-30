@@ -1,5 +1,7 @@
 package com.jhani.measurear.presentation
 
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.app.Activity
@@ -341,8 +343,12 @@ fun ARScreen(
                     onDragEnd = { sessionManager.requestAction(MeasureAction.DragEnd) }
                 )
 
+                // Height of the bottom controls, so the transient hint can sit above them
+                var controlsHeight by remember { mutableStateOf(0) }
+
                 // Scanning guide whenever ARCore has no surface to measure on
-                if (ui.surfaceCount == 0 && !ui.hasPendingPoint) {
+                val scanning = ui.surfaceCount == 0 && !ui.hasPendingPoint && ui.draftCount == 0
+                if (scanning) {
                     OnboardingHint(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -431,12 +437,13 @@ fun ARScreen(
 
                 // Transient hint (e.g. + pressed while not aiming at a surface)
                 hint?.let { message ->
-                    // Just above the bottom controls, clear of the crosshair and measurements
+                    // Just above the bottom controls (taller with a mode's own controls),
+                    // clear of the crosshair and measurements
+                    val aboveControls = with(LocalDensity.current) { controlsHeight.toDp() } - 16.dp
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                            .padding(bottom = 250.dp)
+                            .padding(bottom = aboveControls.coerceAtLeast(250.dp))
                             .padding(horizontal = 32.dp),
                         shape = RoundedCornerShape(16.dp),
                         color = Color.Black.copy(alpha = 0.7f)
@@ -483,7 +490,10 @@ fun ARScreen(
                     onAdd = { pressedAt -> sessionManager.requestAction(MeasureAction.AddPoint(pressedAt)) },
                     onClear = { sessionManager.requestAction(MeasureAction.Clear) },
                     onSelectTool = { tool = it },
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    scanning = scanning,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { controlsHeight = it.height }
                 )
 
                 selectedLine?.let { index ->
@@ -886,6 +896,7 @@ private fun MeasureControls(
     onAdd: (pressedAtNanos: Long) -> Unit,
     onClear: () -> Unit,
     onSelectTool: (Tool) -> Unit,
+    scanning: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -913,6 +924,9 @@ private fun MeasureControls(
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
+        } else if (scanning && mode != MeasureMode.FAR) {
+            // The scanning guide has this space until there's a surface; the mode's own
+            // controls and instructions follow once there is
         } else {
             if (mode == MeasureMode.FAR) {
                 GroundChip(groundDetected, phoneHeight, unit, onPhoneHeightClick)
@@ -929,7 +943,7 @@ private fun MeasureControls(
             ResultCard(result = result, mode = mode, draftCount = draftCount, unit = unit)
             // Finished area: what to buy, and a floor plan
             val area = result?.area
-            if (result != null && !result.isLive && area != null && draftCount == 0) {
+            if (result != null && !result.isLive && area != null && draftCount == 0 && mode != MeasureMode.FIT) {
                 Spacer(modifier = Modifier.height(8.dp))
                 AreaActions(onMaterials = { onMaterials(area) }, onPlan = { onPlan(result) })
             }

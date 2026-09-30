@@ -609,11 +609,10 @@ fun AccuracyMeter(error: Float, onSurface: Boolean, unit: MeasureUnit) {
 /** Will it fit?: size of the box under the result, with rotate buttons for a placed box. */
 @Composable
 fun FitControls(spec: com.jhani.measurear.measurement.BoxSpec, unit: MeasureUnit, onSize: () -> Unit, onRotate: (Float) -> Unit) {
-    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FitButton("⟲") { onRotate(-15f) }
         Text(
-            "${LocalContext.current.boxName(spec)} · ${fmt(spec.width)} × ${fmt(spec.depth)} × ${fmt(spec.height)}  ▾",
+            "${LocalContext.current.boxName(spec)} · ${com.jhani.measurear.measurement.formatBoxSize(spec.width, spec.depth, spec.height, unit)}  ▾",
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.Black.copy(alpha = 0.55f))
@@ -656,7 +655,6 @@ fun FitSizeDialog(
     var w by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(show(current.width)) }
     var d by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(show(current.depth)) }
     var ht by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(show(current.height)) }
-    val fmt = { m: Float -> com.jhani.measurear.measurement.formatLength(m, unit) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF0E1614),
@@ -677,7 +675,7 @@ fun FitSizeDialog(
                             ) {
                                 Text(LocalContext.current.boxName(preset), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    "${fmt(preset.width)} × ${fmt(preset.depth)} × ${fmt(preset.height)}",
+                                    com.jhani.measurear.measurement.formatBoxSize(preset.width, preset.depth, preset.height, unit),
                                     color = Color.White.copy(alpha = 0.55f), fontSize = 10.sp
                                 )
                             }

@@ -22,6 +22,18 @@ class FloorPlanTest {
         assertEquals(12f, abs(FloorPlan.signedArea(plan)), 1e-3f)
     }
 
+    @Test fun tiltedOutlineKeepsSideLengthsWhateverSurfaceNormal() {
+        // 0.8 × 0.3 m rectangle rising 60° off the floor (estimated corners), floor normal given
+        val c = Math.cos(Math.toRadians(60.0)).toFloat()
+        val sn = Math.sin(Math.toRadians(60.0)).toFloat()
+        val rect = listOf(v(0f, 0f, 0f), v(0.8f * c, 0.8f * sn, 0f), v(0.8f * c, 0.8f * sn, 0.3f), v(0f, 0f, 0.3f))
+        val plan = FloorPlan.flatten(rect, Vec3.UP)
+        fun d(p: FloorPlan.P, q: FloorPlan.P) = Math.hypot((q.x - p.x).toDouble(), (q.y - p.y).toDouble()).toFloat()
+        assertEquals(0.8f, d(plan[0], plan[1]), 1e-3f)
+        assertEquals(0.3f, d(plan[1], plan[2]), 1e-3f)
+        assertEquals(0.24f, abs(FloorPlan.signedArea(plan)), 1e-3f)
+    }
+
     @Test fun fitStaysInsideMarginsAndKeepsProportions() {
         val plan = listOf(FloorPlan.P(0f, 0f), FloorPlan.P(4f, 0f), FloorPlan.P(4f, 3f), FloorPlan.P(0f, 3f))
         val f = FloorPlan.fit(plan, 1600f, 1200f, 100f)

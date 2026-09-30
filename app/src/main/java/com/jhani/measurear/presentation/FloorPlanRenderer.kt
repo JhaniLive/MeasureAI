@@ -13,6 +13,7 @@ import com.jhani.measurear.measurement.formatArea
 import com.jhani.measurear.measurement.formatLength
 import java.text.DateFormat
 import java.util.Date
+import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
@@ -34,7 +35,8 @@ object FloorPlanRenderer {
 
         // Faint 1 m grid is added after fitting (needs the scale)
         val plan = FloorPlan.flatten(outline, normal)
-        val fitted = FloorPlan.fit(plan, W.toFloat(), H - 180f, 170f)
+        // Margin leaves room for wall lengths beside the side walls
+        val fitted = FloorPlan.fit(plan, W.toFloat(), H - 180f, 250f)
         val pts = fitted.points.map { FloorPlan.P(it.x, it.y + 20f) }
         if (pts.size < 3) return bitmap
 
@@ -59,7 +61,8 @@ object FloorPlanRenderer {
         })
 
         // Wall lengths, outside each wall (skip the many tiny edges of a circle)
-        val ccw = FloorPlan.signedArea(plan) > 0
+        // Winding measured on the image itself (its y axis points down, unlike the plan's)
+        val ccw = FloorPlan.signedArea(pts) > 0
         val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = INK; textSize = 34f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); textAlign = Paint.Align.CENTER
         }
@@ -74,16 +77,18 @@ object FloorPlanRenderer {
                 val dy = b.y - a.y
                 val len = hypot(dx, dy)
                 if (len < 40f) continue
-                // Outward normal in screen space (y is flipped relative to the plan)
+                // Outward normal in image space
                 var nx = dy / len
                 var ny = -dx / len
                 if (!ccw) { nx = -nx; ny = -ny }
                 val off = 42f
                 c.drawLine(a.x + nx * off, a.y + ny * off, b.x + nx * off, b.y + ny * off, dim)
-                val meters = len / fitted.pxPerMeter
-                val mx = (a.x + b.x) / 2f + nx * (off + 30f)
-                val my = (a.y + b.y) / 2f + ny * (off + 30f) + 12f
-                c.drawText(formatLength(meters, unit), mx, my, label)
+                val text = formatLength(len / fitted.pxPerMeter, unit)
+                // Beside a side wall the text's half width also has to clear the wall
+                val clear = off + 30f + abs(nx) * label.measureText(text) / 2f
+                val mx = (a.x + b.x) / 2f + nx * clear
+                val my = (a.y + b.y) / 2f + ny * clear + 12f
+                c.drawText(text, mx, my, label)
             }
         }
 
